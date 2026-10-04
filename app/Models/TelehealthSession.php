@@ -1,0 +1,106 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+class TelehealthSession extends Model
+{
+    protected $guarded = [];
+
+    protected $casts = [
+        'start_time' => 'datetime',
+        'escalated_at' => 'datetime',
+    ];
+
+    public const STATUS_NOT_CONFIGURED = 'NOT_CONFIGURED';
+    public const STATUS_SCHEDULED = 'SCHEDULED';
+    public const STATUS_ACTIVE = 'ACTIVE';
+    public const STATUS_ONGOING = 'ONGOING';
+    public const STATUS_COMPLETED = 'COMPLETED';
+    public const STATUS_CANCELLED = 'CANCELLED';
+    public const STATUS_ESCALATED = 'ESCALATED';
+
+    public function appointment(): BelongsTo
+    {
+        return $this->belongsTo(Appointment::class);
+    }
+
+    public function participants(): HasMany
+    {
+        return $this->hasMany(TelehealthParticipant::class);
+    }
+
+    public function prescriptions(): HasMany
+    {
+        return $this->hasMany(Prescription::class);
+    }
+
+    public function intake(): HasOne
+    {
+        return $this->hasOne(TelehealthIntake::class);
+    }
+
+    public function aiSummary(): HasOne
+    {
+        return $this->hasOne(TelehealthAiSummary::class);
+    }
+
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(TelehealthReferral::class);
+    }
+
+    public function isLive(): bool
+    {
+        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_ONGOING], true);
+    }
+
+    public function displayStatus(): string
+    {
+        return match ($this->status) {
+            self::STATUS_ONGOING, self::STATUS_ACTIVE => 'Ongoing',
+            self::STATUS_SCHEDULED => 'Scheduled',
+            self::STATUS_COMPLETED => 'Completed',
+            self::STATUS_CANCELLED => 'Cancelled',
+            self::STATUS_ESCALATED => 'Escalated to ER',
+            default => 'Not configured',
+        };
+    }
+
+    public function erVisit(): HasOne
+    {
+        return $this->hasOne(ErVisit::class);
+    }
+
+    public function secureJoinToken(): string
+    {
+        // Must only use fields that never change after creation: updated_at/join_url would be
+        // mutated by the very save() that persists this token, invalidating it immediately.
+        $payload = implode('|', [
+            (string) $this->id,
+            (string) ($this->appointment_id ?? 0),
+            (string) ($this->start_time?->timestamp ?? 0),
+            (string) ($this->created_at?->timestamp ?? 0),
+        ]);
+
+        return hash_hmac('sha256', $payload, config('app.key'));
+    }
+
+    public function secureJoinUrl(): string
+    {
+        if (filled($this->join_url)) {
+            $url = $this->join_url;
+            if (str_contains($url, '?')) {
+                return $url . '&token=' . rawurlencode($this->secureJoinToken());
+            }
+
+            return $url . '?token=' . rawurlencode($this->secureJoinToken());
+        }
+
+        return url('/telehealth/' . $this->id . '/join?token=' . rawurlencode($this->secureJoinToken()));
+    }
+}

@@ -1,0 +1,516 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ErQueue;
+use App\Models\ErVisit;
+use App\Models\Patient;
+use App\Models\PreArrivalProfile;
+use App\Models\TriageAssessment;
+use App\Models\TriageVital;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class TriageService
+{
+    private const IMMEDIATE_THREAT_TERMS = [
+        'cardiac arrest',
+        'respiratory arrest',
+        'pulseless',
+        'airway obstruction',
+        'major uncontrolled hemorrhage',
+        'severe bleeding',
+        'unresponsive',
+        'apnea',
+        'severe trauma',
+    ];
+
+    private const HIGH_RISK_TERMS = [
+        'stroke',
+        'chest pain',
+        'severe breathing difficulty',
+        'difficulty breathing',
+        'shortness of breath',
+        'altered mental status',
+        'sepsis',
+        'suicidal',
+        'homicidal',
+        'intoxication',
+        'agitation',
+    ];
+
+    private const MULTIPLE_RESOURCE_TERMS = [
+        'abdominal pain',
+        'high fever',
+        'cough',
+        'headache',
+        'trauma',
+        'fracture',
+        'vomiting',
+        'diarrhea',
+        'dizziness',
+        'syncope',
+        'infection',
+    ];
+
+    private const SINGLE_RESOURCE_TERMS = [
+        'laceration',
+        'sprain',
+        'minor rash',
+        'medication refill',
+        'sore throat',
+        'simple wound',
+        'burn',
+        'itching',
+        'rash',
+        'stitch',
+        'suture',
+        'x-ray',
+    ];
+
+    private ?DischargeSummaryService $summaries;
+
+    private ?BillingAggregationService $billing;
+
+    public function __construct(
+        protected AuditLogService $audit,
+        protected ?EmergencyAlertService $emergencyAlerts = null,
+        ?DischargeSummaryService $summaries = null,
+        ?BillingAggregationService $billing = null,
+    )
+    {
+        $this->summaries = $summaries;
+        $this->billing = $billing;
+    }
+
+    /**
+     * Generate the next ER visit number.
+     */
+    public function generateVisitNumber(): string
+    {
+        $year = now()->format('Y');
+        $candidates = ErVisit::where('visit_number', 'like', "ER-{$year}-%")
+            ->lockForUpdate()
+            ->pluck('visit_number');
+
+        $maxSequence = 0;
+        foreach ($candidates as $number) {
+            if (preg_match('/^ER-' . preg_quote($year, '/') . '-(\d{6})$/', $number, $matches)) {
+                $maxSequence = max($maxSequence, (int) $matches[1]);
+            }
+        }
+
+        return sprintf('ER-%s-%06d', $year, $maxSequence + 1);
+    }
+
+    /**
+     * Register an ER visit (arrival).
+     */
+    public function registerErVisit(array $data): ErVisit
+    {
+        $visit = DB::transaction(function () use ($data) {
+            $visit = $this->createErVisitRecord($data);
+            $this->audit->createErVisit($visit->id);
+
+            return $visit;
+        });
+
+        ($this->emergencyAlerts ?? app(EmergencyAlertService::class))->visitCreated();
+
+        return $visit;
+    }
+
+    public function registerUnknownErVisit(array $data): ErVisit
+    {
+        $visit = DB::transaction(function () use ($data): ErVisit {
+            $patient = app(PatientService::class)->register([
+                'first_name' => $data['first_name'] ?? null,
+                'last_name' => $data['last_name'] ?? null,
+                'date_of_birth' => $data['date_of_birth'] ?? null,
+                'sex' => $data['sex'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'email' => $data['email'] ?? null,
+                'verified' => false,
+                'is_temporary_identity' => true,
+                'temporary_identity_label' => 'ER-UNKNOWN-'.Str::upper(Str::random(10)),
+            ], auth()->id());
+
+            $visit = $this->createErVisitRecord([
+                'patient_id' => $patient->id,
+                'arrived_at' => $data['arrived_at'] ?? now(),
+                'arrival_method' => $data['arrival_method'] ?? null,
+                'chief_complaint' => $data['chief_complaint'],
+                'referral_details' => $data['referral_details'] ?? null,
+            ]);
+            $this->audit->createErVisit($visit->id);
+
+            return $visit;
+        });
+
+        ($this->emergencyAlerts ?? app(EmergencyAlertService::class))->visitCreated();
+
+        return $visit->load('patient');
+    }
+
+    protected function createErVisitRecord(array $data): ErVisit
+    {
+        return ErVisit::create([
+            'visit_number' => $this->generateVisitNumber(),
+            'patient_id' => $data['patient_id'],
+            'arrived_at' => $data['arrived_at'] ?? now(),
+            'arrival_method' => $data['arrival_method'] ?? null,
+            'chief_complaint' => $data['chief_complaint'],
+            'referral_details' => $data['referral_details'] ?? null,
+            'status' => ErVisit::STATUS_ARRIVED,
+            'created_by' => auth()->id(),
+        ]);
+    }
+
+    /**
+     * Perform a triage assessment on an ER visit. Clinical priority is set by the nurse.
+     */
+    public function triage(ErVisit $visit, array $data): TriageAssessment
+    {
+        $assessment = DB::transaction(function () use ($visit, $data) {
+            $assessment = $this->createAssessment($visit, $data);
+            $this->createVitalsIfPresent($assessment, $data['vitals'] ?? null);
+            $this->markVisitTriaged($visit);
+            $this->createQueueEntry($visit, $data);
+            $this->audit->createTriage($assessment->id);
+
+            return $assessment;
+        });
+
+        ($this->emergencyAlerts ?? app(EmergencyAlertService::class))->triageRecorded($assessment);
+
+        return $assessment;
+    }
+
+    public function score(array $data): array
+    {
+        $analysisData = $this->buildAnalysisData($data);
+        $ai = app(AiTriageService::class)->analyze($analysisData);
+
+        return [
+            'level' => $ai['level'],
+            'score' => $ai['score'],
+            'severity_score' => $ai['severity_score'],
+            'priority' => $ai['priority'],
+            'priority_band' => $ai['priority_band'],
+            'color' => $ai['color'],
+            'confidence' => $ai['confidence'],
+            'recommendation' => $ai['recommendation'],
+            'reasons' => $ai['reasons'],
+        ];
+    }
+
+    public function recordDecision(
+        TriageAssessment $assessment,
+        array $analysis,
+        string $finalLevel,
+        ?string $overrideReason,
+        User $actor
+    ): TriageAssessment {
+        return DB::transaction(function () use ($assessment, $analysis, $finalLevel, $overrideReason, $actor): TriageAssessment {
+            $suggestedLevel = (string) $analysis['priority'];
+            $isOverridden = $finalLevel !== $suggestedLevel;
+            $overriddenAt = $isOverridden ? now() : null;
+
+            $assessment->update([
+                'ai_suggested_level' => $suggestedLevel,
+                'ai_confidence' => $analysis['confidence'] ?? null,
+                'ai_reasons' => $analysis['reasons'] ?? [],
+                'final_level' => $finalLevel,
+                'is_overridden' => $isOverridden,
+                'override_reason' => $isOverridden ? $overrideReason : null,
+                'overridden_by' => $isOverridden ? $actor->id : null,
+                'overridden_at' => $overriddenAt,
+            ]);
+
+            app(AuditLogService::class)->recordTriageDecision(
+                $assessment,
+                $suggestedLevel,
+                isset($analysis['confidence']) ? (int) $analysis['confidence'] : null,
+                $finalLevel,
+                $isOverridden ? $overrideReason : null,
+                $actor->id
+            );
+
+            return $assessment->fresh();
+        });
+    }
+
+    protected function buildAnalysisData(array $data): array
+    {
+        $patientId = $data['patient_id'] ?? null;
+        $merged = $data;
+        $patient = $patientId ? Patient::query()->find((int) $patientId) : null;
+        if ($patient?->age !== null) {
+            $merged['age'] = $patient->age;
+        }
+
+        $profile = $patientId ? $this->resolvePreArrivalProfile((int) $patientId) : null;
+
+        if (! $profile) {
+            return $merged;
+        }
+
+        $merged['pre_arrival_profile'] = [
+            'visit_reason' => $profile->visit_reason,
+            'medical_history' => $profile->medical_history,
+            'current_medications' => $profile->current_medications,
+            'allergies' => $profile->allergies,
+            'initial_notes' => $profile->initial_notes,
+            'emergency_name' => $profile->emergency_name,
+            'emergency_phone' => $profile->emergency_phone,
+        ];
+
+        if (blank($merged['chief_complaint'] ?? null) && filled($profile->visit_reason)) {
+            $merged['chief_complaint'] = $profile->visit_reason;
+        }
+
+        if (empty($merged['symptoms'] ?? []) && filled($profile->medical_history)) {
+            $merged['symptoms'] = array_values(array_filter(array_map('trim', preg_split('/[,;\n]/', $profile->medical_history ?? ''))));
+        }
+
+        return $merged;
+    }
+
+    protected function resolvePreArrivalProfile(int $patientId): ?PreArrivalProfile
+    {
+        return PreArrivalProfile::where('patient_id', $patientId)
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
+    protected function isImmediateThreat(array $values, string $complaint, array $visual, array $symptoms): bool
+    {
+        if ($this->containsAnyKeyword($complaint, self::IMMEDIATE_THREAT_TERMS)) {
+            return true;
+        }
+
+        if ($this->anySymptomMatches($symptoms, self::IMMEDIATE_THREAT_TERMS)) {
+            return true;
+        }
+
+        if (in_array($visual['breathing'] ?? '', ['Unable to speak', 'Gasping'], true)) {
+            return true;
+        }
+
+        if (($visual['consciousness'] ?? '') === 'Unresponsive') {
+            return true;
+        }
+
+        if (($values['vitals']['spo2'] ?? null) !== null && $values['vitals']['spo2'] < 90) {
+            return true;
+        }
+
+        if (($values['vitals']['blood_pressure'] ?? null) !== null && $values['vitals']['blood_pressure'] < 90) {
+            return true;
+        }
+
+        if (($values['vitals']['respiratory_rate'] ?? null) !== null && ($values['vitals']['respiratory_rate'] > 30 || $values['vitals']['respiratory_rate'] < 8)) {
+            return true;
+        }
+
+        if (($values['vitals']['heart_rate'] ?? null) !== null && ($values['vitals']['heart_rate'] > 130 || $values['vitals']['heart_rate'] < 40)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function isHighRisk(array $values, string $complaint, array $visual, int $pain, array $symptoms): bool
+    {
+        if ($this->containsAnyKeyword($complaint, self::HIGH_RISK_TERMS)) {
+            return true;
+        }
+
+        if ($this->anySymptomMatches($symptoms, self::HIGH_RISK_TERMS)) {
+            return true;
+        }
+
+        if (($visual['consciousness'] ?? '') === 'Drowsy') {
+            return true;
+        }
+
+        if ($pain >= 8 && $this->containsAnyKeyword($complaint, ['chest pain', 'abdominal pain', 'headache', 'breathing', 'trauma'])) {
+            return true;
+        }
+
+        if (($values['vitals']['temperature'] ?? null) !== null && ($values['vitals']['blood_pressure'] ?? null) !== null && $values['vitals']['temperature'] >= 38 && $values['vitals']['blood_pressure'] < 100) {
+            return true;
+        }
+
+        if (($values['vitals']['spo2'] ?? null) !== null && $values['vitals']['spo2'] < 94 && ($values['vitals']['respiratory_rate'] ?? null) !== null && $values['vitals']['respiratory_rate'] > 24) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function estimateResourceCount(array $values, string $complaint, array $visual, array $symptoms): int
+    {
+        if ($this->containsAnyKeyword($complaint, self::MULTIPLE_RESOURCE_TERMS) || $this->anySymptomMatches($symptoms, self::MULTIPLE_RESOURCE_TERMS)) {
+            return 2;
+        }
+
+        if ($this->containsAnyKeyword($complaint, self::SINGLE_RESOURCE_TERMS) || $this->anySymptomMatches($symptoms, self::SINGLE_RESOURCE_TERMS)) {
+            return 1;
+        }
+
+        if (($visual['breathing'] ?? '') === 'Labored') {
+            return 2;
+        }
+
+        if (($values['pain_score'] ?? 0) >= 7) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    protected function containsAnyKeyword(string $text, array $keywords): bool
+    {
+        $text = strtolower($text);
+        foreach ($keywords as $keyword) {
+            if ($keyword !== '' && str_contains($text, strtolower($keyword))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function anySymptomMatches(array $symptoms, array $keywords): bool
+    {
+        foreach ($symptoms as $symptom) {
+            if ($this->containsAnyKeyword((string) $symptom, $keywords)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function createAssessment(ErVisit $visit, array $data): TriageAssessment
+    {
+        // er_visit_id is unique on triage_assessments: a visit may already have one from the
+        // "Patient Triage Intake" modal flow, so re-triaging (e.g. a clinical override) must update it, not insert.
+        return TriageAssessment::updateOrCreate(
+            ['er_visit_id' => $visit->id],
+            [
+                'patient_id' => $visit->patient_id,
+                'triage_nurse_id' => auth()->id(),
+                'triaged_at' => now(),
+                'chief_complaint' => $data['chief_complaint'] ?? $visit->chief_complaint,
+                'pain_score' => $data['pain_score'] ?? null,
+                'priority' => $data['priority'],
+                'priority_score' => $this->normalizePriorityScore($data['priority']),
+                'triage_color' => $this->normalizePriorityColor($data['priority']),
+                'gcs' => $data['gcs'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'status' => 'COMPLETE',
+            ]
+        );
+    }
+
+    protected function createVitalsIfPresent(TriageAssessment $assessment, ?array $vitals): void
+    {
+        if (empty($vitals)) {
+            return;
+        }
+
+        TriageVital::updateOrCreate(
+            ['triage_assessment_id' => $assessment->id],
+            array_merge(['patient_id' => $assessment->patient_id, 'recorded_at' => now()], $vitals)
+        );
+    }
+
+    protected function markVisitTriaged(ErVisit $visit): void
+    {
+        // Don't regress status if the visit has already progressed past triage (e.g. IN_TREATMENT) when re-triaged.
+        if ($visit->status === ErVisit::STATUS_ARRIVED) {
+            $visit->update(['status' => ErVisit::STATUS_TRIAGED]);
+        }
+    }
+
+    protected function createQueueEntry(ErVisit $visit, array $data): void
+    {
+        // er_visit_id is unique on er_queue: update the existing entry (priority override) instead of
+        // inserting a duplicate, and preserve queued_at/status so an override doesn't reset wait time or progress.
+        $existing = ErQueue::where('er_visit_id', $visit->id)->first();
+
+        if ($existing) {
+            $existing->update([
+                'priority' => $data['priority'],
+                'treatment_area' => $data['treatment_area'] ?? $existing->treatment_area,
+                'provider_id' => $data['provider_id'] ?? $existing->provider_id,
+            ]);
+
+            return;
+        }
+
+        ErQueue::create([
+            'er_visit_id' => $visit->id,
+            'priority' => $data['priority'],
+            'status' => ErQueue::STATUS_WAITING,
+            'treatment_area' => $data['treatment_area'] ?? null,
+            'provider_id' => $data['provider_id'] ?? null,
+            'queued_at' => now(),
+        ]);
+    }
+
+    /**
+     * Update ER queue status (e.g., IN_TREATMENT, DONE).
+     */
+    public function updateQueueStatus(ErQueue $queue, string $status, ?int $providerId = null): ErQueue
+    {
+        $visit = $queue->erVisit;
+        if ($status === ErQueue::STATUS_DONE) {
+            ($this->summaries ?? app(DischargeSummaryService::class))->assertErSummaryApproved($visit);
+            ($this->billing ?? app(BillingAggregationService::class))->assertErVisitCanDischarge($visit);
+        }
+
+        $queue->update([
+            'status' => $status,
+            'provider_id' => $providerId ?? $queue->provider_id,
+        ]);
+
+        if ($status === ErQueue::STATUS_IN_TREATMENT) {
+            $this->markVisitInTreatment($visit);
+        } elseif ($status === ErQueue::STATUS_DONE) {
+            $visit->update(['status' => ErVisit::STATUS_DISCHARGED]);
+        }
+
+        return $queue;
+    }
+
+    protected function markVisitInTreatment(ErVisit $visit): void
+    {
+        $visit->update(['status' => ErVisit::STATUS_IN_TREATMENT]);
+    }
+
+    protected function normalizePriorityScore(string $priority): int
+    {
+        return match (strtolower(trim($priority))) {
+            'level 1', 'emergency', 'red' => 1,
+            'level 2', 'urgent', 'yellow' => 2,
+            'level 3', 'prompt', 'orange' => 3,
+            'level 4', 'non-urgent', 'green' => 4,
+            'level 5', 'routine' => 5,
+            default => 5,
+        };
+    }
+
+    protected function normalizePriorityColor(string $priority): string
+    {
+        return match (strtolower(trim($priority))) {
+            'level 1', 'emergency', 'red' => 'red',
+            'level 2', 'urgent', 'yellow' => 'yellow',
+            'level 3', 'prompt', 'orange' => 'orange',
+            default => 'green',
+        };
+    }
+}

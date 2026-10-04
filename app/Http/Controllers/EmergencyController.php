@@ -1,0 +1,380 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StoreTriageDecisionRequest;
+use App\Http\Requests\CreateUnknownErArrivalRequest;
+use App\Models\ErQueue;
+use App\Models\ErVisit;
+use App\Models\Patient;
+use App\Models\Provider;
+use App\Models\TriageAssessment;
+use App\Services\TriageService;
+use App\Services\DischargeSummaryService;
+use App\Services\BillingAggregationService;
+use App\Services\PatientService;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
+
+class EmergencyController extends Controller
+{
+    public function __construct(
+        protected TriageService $triage,
+        protected PatientService $patients
+    ) {}
+
+    public function index(Request $request)
+    {
+        $query = ErQueue::with(['erVisit.patient', 'provider'])
+            ->orderByRaw("CASE priority
+                WHEN 'Level 1' THEN 1
+                WHEN 'Level 2' THEN 2
+                WHEN 'Level 3' THEN 3
+                WHEN 'Level 4' THEN 4
+                WHEN 'Level 5' THEN 5
+                ELSE 99
+            END")
+            ->orderBy('queued_at');
+
+        if ($request->filled('q')) {
+            $term = trim($request->q);
+            $query->whereHas('erVisit.patient', function ($patientQuery) use ($term) {
+                $patientQuery->where(function ($nameQuery) use ($term) {
+                    $nameQuery->where('first_name', 'like', "%{$term}%")
+                        ->orWhere('last_name', 'like', "%{$term}%");
+                })->orWhere('mrn', 'like', "%{$term}%");
+            });
+        }
+
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        $statusFilter = $request->input('status');
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $statusValue = strtolower((string) $statusFilter);
+            if (in_array($statusValue, ['live', 'active'], true)) {
+                $query->whereIn('status', [ErQueue::STATUS_WAITING, ErQueue::STATUS_IN_TREATMENT]);
+            } else {
+                $query->where('status', $statusFilter);
+            }
+        }
+
+        $queue = $query->paginate(20);
+
+        $visits = ErVisit::with('patient')->orderBy('arrived_at', 'desc')->limit(10)->get();
+        $patients = Patient::orderBy('last_name')->get();
+        $providers = Provider::where('active', true)->orderBy('display_name')->get();
+
+        return view('emergency.index', compact('queue', 'visits', 'patients', 'providers'));
+    }
+
+    public function create(Request $request)
+    {
+        $patients = Patient::orderBy('last_name')->get();
+
+        $prefill = [
+            'triage_assessment_id' => null,
+            'patient_id' => $request->query('patient_id'),
+            'chief_complaint' => null,
+            'symptoms' => null,
+            'pain_score' => null,
+            'blood_pressure' => null,
+            'heart_rate' => null,
+            'respiratory_rate' => null,
+            'temperature' => null,
+            'spo2' => null,
+            'referral_details' => null,
+            'arrival_method' => null,
+            'arrived_at' => now()->format('Y-m-d\TH:i'),
+        ];
+
+        $assessmentId = $request->query('triage_assessment_id', $request->input('triage_assessment_id'));
+        if ($assessmentId) {
+            $assessment = TriageAssessment::with(['patient', 'vitals'])->find($assessmentId);
+            if ($assessment) {
+                $prefill['triage_assessment_id'] = $assessment->id;
+                $prefill['patient_id'] = $assessment->patient_id;
+                $prefill['chief_complaint'] = $assessment->chief_complaint ?? null;
+                $prefill['symptoms'] = is_array($assessment->symptoms) ? implode(', ', $assessment->symptoms) : $assessment->symptoms;
+                $prefill['pain_score'] = $assessment->pain_score ?? null;
+                $prefill['blood_pressure'] = $assessment->vitals?->blood_pressure ?? null;
+                $prefill['heart_rate'] = $assessment->vitals?->heart_rate ?? null;
+                $prefill['respiratory_rate'] = $assessment->vitals?->respiratory_rate ?? null;
+                $prefill['temperature'] = $assessment->vitals?->temperature ?? null;
+                // spo2 is cast to decimal:2 on TriageVital (e.g. "95.00"), but emergency.store validates it as an integer.
+                $prefill['spo2'] = $assessment->vitals?->spo2 !== null ? (int) round((float) $assessment->vitals->spo2) : null;
+                $prefill['referral_details'] = $assessment->notes ?? null;
+                $prefill['arrival_method'] = $assessment->erVisit?->arrival_method ?? null;
+                $prefill['arrived_at'] = $assessment->erVisit?->arrived_at ? $assessment->erVisit->arrived_at->format('Y-m-d\TH:i') : now()->format('Y-m-d\TH:i');
+            }
+        }
+
+        return view('emergency.create', compact('patients', 'prefill'));
+    }
+
+    public function createFromTriage(TriageAssessment $triageAssessment)
+    {
+        $request = new Request(['triage_assessment_id' => $triageAssessment->id]);
+
+        return $this->create($request);
+    }
+
+    public function store(Request $request): \Illuminate\Http\RedirectResponse|JsonResponse
+    {
+        $data = $request->validate([
+            'triage_assessment_id' => ['nullable', 'exists:triage_assessments,id'],
+            'patient_id' => ['nullable', 'required_without_all:reference_code,triage_assessment_id', 'exists:patients,id'],
+            'reference_code' => ['nullable', 'required_without_all:patient_id,triage_assessment_id', 'string', 'max:255'],
+            'arrived_at' => ['nullable', 'date'],
+            'arrival_method' => ['nullable', 'string', 'max:50'],
+            'chief_complaint' => ['nullable', 'string'],
+            'symptoms' => ['nullable', 'string'],
+            'pain_score' => ['nullable', 'integer', 'min:0', 'max:10'],
+            'blood_pressure' => ['nullable', 'string', 'max:20'],
+            'heart_rate' => ['nullable', 'integer', 'min:0', 'max:220'],
+            'respiratory_rate' => ['nullable', 'integer', 'min:0', 'max:80'],
+            'temperature' => ['nullable', 'numeric', 'min:30', 'max:45'],
+            'spo2' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'referral_details' => ['nullable', 'string'],
+        ], [
+            'reference_code.required_without_all' => 'No patient record found for this code.',
+            'reference_code.string' => 'No patient record found for this code.',
+            'reference_code.max' => 'No patient record found for this code.',
+        ]);
+
+        $assessment = null;
+        if (! empty($data['triage_assessment_id'])) {
+            $assessment = TriageAssessment::with(['vitals', 'erVisit'])->findOrFail($data['triage_assessment_id']);
+
+            if (filled($data['reference_code'] ?? null)) {
+                $lookup = $this->patients->lookupByReferenceCode(
+                    $request->user(),
+                    $data['reference_code'],
+                    (int) $assessment->patient_id
+                );
+                if ($lookup['status'] !== 'found') {
+                    throw ValidationException::withMessages([
+                        'reference_code' => ['No patient record found for this code.'],
+                    ]);
+                }
+            }
+            $data['patient_id'] = $assessment->patient_id;
+            $data['chief_complaint'] = $assessment->chief_complaint;
+
+            if ($assessment->patient_id && $assessment->patient_id !== (int) $data['patient_id']) {
+                $data['patient_id'] = $assessment->patient_id;
+            }
+        } elseif (filled($data['reference_code'] ?? null)) {
+            $lookup = $this->patients->lookupByReferenceCode(
+                $request->user(),
+                $data['reference_code'],
+                isset($data['patient_id']) ? (int) $data['patient_id'] : null
+            );
+            if ($lookup['status'] !== 'found' || ! $lookup['patient']) {
+                throw ValidationException::withMessages([
+                    'reference_code' => ['No patient record found for this code.'],
+                ]);
+            }
+            $data['patient_id'] = $lookup['patient']->id;
+        }
+
+        if (! $data['patient_id'] || ! $data['chief_complaint']) {
+            throw ValidationException::withMessages([
+                'patient_id' => ['A patient assessment is required before registering arrival.'],
+            ]);
+        }
+
+        $visit = $assessment?->erVisit;
+        if (! $visit) {
+            $visit = $this->triage->registerErVisit([
+                'patient_id' => $data['patient_id'],
+                'arrived_at' => $data['arrived_at'] ?? now(),
+                'arrival_method' => $data['arrival_method'] ?? null,
+                'chief_complaint' => $data['chief_complaint'],
+                'referral_details' => $data['referral_details'] ?? null,
+            ]);
+        } else {
+            $visit->update([
+                'chief_complaint' => $data['chief_complaint'] ?? $visit->chief_complaint,
+                'arrival_method' => $data['arrival_method'] ?? $visit->arrival_method,
+                'referral_details' => $data['referral_details'] ?? $visit->referral_details,
+                'arrived_at' => $data['arrived_at'] ?? $visit->arrived_at,
+            ]);
+        }
+
+        if ($assessment) {
+            $assessment->update([
+                'er_visit_id' => $visit->id,
+                'patient_id' => $data['patient_id'],
+                'chief_complaint' => $data['chief_complaint'],
+                'symptoms' => $this->normalizeSymptoms($data['symptoms'] ?? $assessment->symptoms),
+                'pain_score' => $data['pain_score'] ?? $assessment->pain_score,
+                'notes' => $data['referral_details'] ?? $assessment->notes,
+            ]);
+
+            $assessment->vitals()->updateOrCreate(
+                ['triage_assessment_id' => $assessment->id],
+                [
+                    'patient_id' => $data['patient_id'],
+                    'blood_pressure' => $data['blood_pressure'] ?? $assessment->vitals?->blood_pressure,
+                    'heart_rate' => $data['heart_rate'] ?? $assessment->vitals?->heart_rate,
+                    'respiratory_rate' => $data['respiratory_rate'] ?? $assessment->vitals?->respiratory_rate,
+                    'temperature' => $data['temperature'] ?? $assessment->vitals?->temperature,
+                    'spo2' => $data['spo2'] ?? $assessment->vitals?->spo2,
+                    'recorded_at' => now(),
+                ]
+            );
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'step' => 3,
+                'visit_id' => $visit->id,
+                'html' => view('emergency.partials.queue-form', compact('visit'))->render(),
+            ]);
+        }
+
+        return redirect()->route('emergency.show', $visit)->with('success', 'ER visit registered. Next: confirm the priority below to add this patient to the active ER queue.');
+    }
+
+    public function storeUnknownArrival(CreateUnknownErArrivalRequest $request): JsonResponse|RedirectResponse
+    {
+        $visit = $this->triage->registerUnknownErVisit($request->validated());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Temporary ER identity and visit registered.',
+                'data' => $visit,
+            ], 201);
+        }
+
+        return redirect()->route('emergency.show', $visit)
+            ->with('success', 'Temporary ER identity registered. Registration Staff can complete the patient identity later.');
+    }
+
+    protected function normalizeSymptoms($symptoms): array
+    {
+        if (is_array($symptoms)) {
+            return array_values(array_filter(array_map('trim', $symptoms), fn ($item) => $item !== ''));
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[,;\n]/', (string) $symptoms ?? '')), fn ($item) => $item !== ''));
+    }
+
+    public function show(ErVisit $visit, DischargeSummaryService $summaries, BillingAggregationService $billing)
+    {
+        $visit->load([
+            'patient',
+            'triageAssessments.triageVital',
+            'triageReassessments.recordedBy',
+            'triageReassessments.confirmedBy',
+            'queue.provider',
+            'createdBy',
+            'dischargeSummary',
+        ]);
+        $providers = Provider::where('active', true)->get();
+        $dischargeRequirements = [];
+        if ($visit->queue) {
+            try {
+                $summaries->assertErSummaryApproved($visit);
+            } catch (ValidationException $exception) {
+                $dischargeRequirements = array_merge($dischargeRequirements, $exception->errors()['discharge_summary'] ?? []);
+            }
+            try {
+                $billing->assertErVisitCanDischarge($visit);
+            } catch (ValidationException $exception) {
+                $dischargeRequirements = array_merge($dischargeRequirements, $exception->errors()['billing'] ?? []);
+            }
+        }
+        $canCompleteErVisit = $visit->queue && $dischargeRequirements === [];
+
+        return view('emergency.show', compact('visit', 'providers', 'dischargeRequirements', 'canCompleteErVisit'));
+    }
+
+    public function triage(StoreTriageDecisionRequest $request, ErVisit $visit): \Illuminate\Http\RedirectResponse|JsonResponse
+    {
+        $data = $request->validated();
+
+        $visit->load(['patient', 'triageAssessments.triageVital']);
+        $existingAssessment = $visit->triageAssessments->sortByDesc('triaged_at')->first();
+        $existingVitals = $existingAssessment?->triageVital;
+        $finalLevel = $request->finalLevel();
+        $priority = $this->normalizePriorityForErQueue($finalLevel);
+        $analysis = $request->aiAnalysis();
+        $symptoms = array_key_exists('symptoms', $data) && $data['symptoms'] !== null
+            ? array_values(array_filter(array_map('trim', preg_split('/[,;\n]/', (string) $data['symptoms']))))
+            : (is_array($existingAssessment?->symptoms) ? $existingAssessment->symptoms : []);
+
+        $assessment = $this->triage->triage($visit, [
+            'chief_complaint' => $data['chief_complaint'] ?? $existingAssessment?->chief_complaint ?? $visit->chief_complaint,
+            'pain_score' => $data['pain_score'] ?? $existingAssessment?->pain_score,
+            'gcs' => $data['gcs'] ?? $existingAssessment?->gcs,
+            'priority' => $this->normalizePriorityForErQueue($priority),
+            'notes' => $data['notes'] ?? $existingAssessment?->notes,
+            'treatment_area' => $data['treatment_area'] ?? null,
+            'provider_id' => $data['provider_id'] ?? null,
+            'vitals' => [
+                'blood_pressure' => $data['vitals_blood_pressure'] ?? $existingVitals?->blood_pressure,
+                'heart_rate' => $data['vitals_heart_rate'] ?? $existingVitals?->heart_rate,
+                'respiratory_rate' => $data['vitals_respiratory_rate'] ?? $existingVitals?->respiratory_rate,
+                'temperature' => $data['vitals_temperature'] ?? $existingVitals?->temperature,
+                'spo2' => $data['vitals_spo2'] ?? $existingVitals?->spo2,
+            ],
+        ]);
+        $assessment = $this->triage->recordDecision(
+            $assessment,
+            $analysis,
+            $finalLevel,
+            $request->overrideReason(),
+            $request->user()
+        );
+        $assessment->update(['gcs' => $data['gcs'] ?? $existingAssessment?->gcs]);
+
+        if ($symptoms !== []) {
+            $assessment->update(['symptoms' => $symptoms]);
+        }
+
+        if ($request->expectsJson()) {
+            $visit->load('queue');
+
+            return response()->json([
+                'success' => true,
+                'step' => 3,
+                'queued' => true,
+                'visit_id' => $visit->id,
+                'queue' => $visit->queue,
+            ]);
+        }
+
+        return redirect()->route('emergency.show', $visit)->with('success', 'Triage assessment completed.');
+    }
+
+    protected function normalizePriorityForErQueue(string $priority): string
+    {
+        return match (strtolower(trim($priority))) {
+            'emergency' => 'Level 1',
+            'urgent' => 'Level 2',
+            'prompt' => 'Level 3',
+            'non-urgent' => 'Level 4',
+            'routine' => 'Level 5',
+            default => $priority,
+        };
+    }
+
+    public function queueStatus(Request $request, ErQueue $queue)
+    {
+        $request->validate([
+            'status' => ['required', 'in:WAITING,IN_TREATMENT,DONE'],
+            'provider_id' => ['nullable', 'exists:providers,id'],
+        ]);
+
+        $this->triage->updateQueueStatus($queue, $request->status, $request->provider_id);
+
+        return back()->with('success', 'ER queue status updated.');
+    }
+}

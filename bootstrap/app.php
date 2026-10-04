@@ -1,0 +1,51 @@
+<?php
+
+use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\ForceHttps;
+use App\Http\Middleware\TrustProxies;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withBroadcasting(__DIR__.'/../routes/channels.php')
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'role' => EnsureRole::class,
+            'cors' => \App\Http\Middleware\AllowCors::class,
+        ]);
+
+        $middleware->prependToGroup('web', [
+            TrustProxies::class,
+            ForceHttps::class,
+            \App\Http\Middleware\NoCacheAuthenticatedPages::class,
+        ]);
+
+        $middleware->prependToGroup('api', [
+            TrustProxies::class,
+            ForceHttps::class,
+        ]);
+
+        $middleware->appendToGroup('web', [
+            \App\Http\Middleware\TrackInactivity::class,
+        ]);
+
+        $middleware->appendToGroup('api', [
+            \App\Http\Middleware\AllowCors::class,
+            \App\Http\Middleware\SecureApiHeaders::class,
+            EnsureFrontendRequestsAreStateful::class,
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*'),
+        );
+    })->create();

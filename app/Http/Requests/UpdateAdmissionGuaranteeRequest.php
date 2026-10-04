@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class UpdateAdmissionGuaranteeRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        $user = $this->user();
+
+        return $user !== null
+            && $user->hasRole('registration', 'super-admin')
+            && $user->hasPermission('assign-beds');
+    }
+
+    public function rules(): array
+    {
+        return [
+            'guarantor_name' => ['nullable', 'string', 'max:150'],
+            'guarantor_relationship' => ['nullable', 'string', 'max:100'],
+            'guarantor_contact' => ['nullable', 'string', 'max:30'],
+            'loa_reference' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+}

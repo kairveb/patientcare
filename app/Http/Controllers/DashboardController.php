@@ -1,0 +1,149 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Admission;
+use App\Models\Appointment;
+use App\Models\AuditLog;
+use App\Models\Bed;
+use App\Models\ErVisit;
+use App\Models\Patient;
+use App\Models\TelehealthSession;
+use Illuminate\Http\Request;
+
+class DashboardController extends Controller
+{
+    public function __invoke(Request $request)
+    {
+        $user = $request->user();
+        $isSuperAdmin = $user->hasRole('super-admin');
+        $providerId = $user->provider?->id;
+
+        $data = [
+            'currentRole' => $isSuperAdmin ? 'super-admin' : ($user->roles()->first()?->name ?? 'guest'),
+        ];
+
+        if ($isSuperAdmin) {
+            $data += [
+                'todayPatients' => Patient::whereDate('created_at', today())->count(),
+                'todayAppointments' => Appointment::whereDate('starts_at', today())->count(),
+                'erPatients' => ErVisit::whereDate('arrived_at', today())->count(),
+                'availableBeds' => Bed::where('status', Bed::STATUS_AVAILABLE)->count(),
+                'occupiedBeds' => Bed::where('status', Bed::STATUS_OCCUPIED)->count(),
+                'telehealthAppointments' => TelehealthSession::whereDate('start_time', today())->count(),
+                'recentAppointments' => Appointment::with(['patient', 'provider', 'appointmentType'])
+                    ->orderBy('starts_at', 'desc')
+                    ->limit(10)
+                    ->get(),
+                'followUpDue' => \App\Models\Encounter::with('patient')
+                    ->whereNotNull('follow_up_date')
+                    ->whereDate('follow_up_date', '<=', now()->addDays(7)->toDateString())
+                    ->orderBy('follow_up_date', 'asc')
+                    ->limit(5)
+                    ->get(),
+                'erQueue' => \App\Models\ErQueue::with(['erVisit.patient'])
+                    ->orderByRaw("CASE priority
+                        WHEN 'Level 1' THEN 1
+                        WHEN 'Level 2' THEN 2
+                        WHEN 'Level 3' THEN 3
+                        WHEN 'Level 4' THEN 4
+                        WHEN 'Level 5' THEN 5
+                        ELSE 99
+                    END")
+                    ->orderBy('queued_at')
+                    ->limit(10)
+                    ->get(),
+                'recentAuditLogs' => AuditLog::with('user')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(10)
+                    ->get(),
+                'bedOccupancy' => Bed::selectRaw('status, count(*) as total')
+                    ->groupBy('status')
+                    ->pluck('total', 'status'),
+            ];
+        }
+
+        // Role-specific data
+        if ($user->hasRole('doctor')) {
+            $data['myAppointments'] = $providerId
+                ? Appointment::with(['patient', 'appointmentType'])->where('provider_id', $providerId)->whereDate('starts_at', today())->get()
+                : collect();
+            $data['myEncounters'] = $providerId
+                ? \App\Models\Encounter::with('patient')->where('provider_id', $providerId)->orderBy('started_at', 'desc')->limit(10)->get()
+                : collect();
+            $data['myPatientCount'] = $providerId
+                ? \App\Models\Encounter::where('provider_id', $providerId)->whereDate('started_at', today())->distinct('patient_id')->count('patient_id')
+                : 0;
+            if (! $isSuperAdmin) {
+                $data['followUpDue'] = $providerId
+                    ? \App\Models\Encounter::with('patient')
+                        ->where('provider_id', $providerId)
+                        ->whereNotNull('follow_up_date')
+                        ->whereDate('follow_up_date', '<=', now()->addDays(7)->toDateString())
+                        ->orderBy('follow_up_date', 'asc')
+                        ->limit(5)
+                        ->get()
+                    : collect();
+            }
+        }
+
+        if ($user->hasRole('patient')) {
+            $patient = $user->patient;
+            $data['myAppointments'] = $patient
+                ? Appointment::with('provider')->where('patient_id', $patient->id)->orderBy('starts_at', 'desc')->limit(10)->get()
+                : collect();
+            $data['myNotifications'] = $user->notifications->take(10);
+            $data['myFollowUps'] = $patient
+                ? \App\Models\Encounter::with('provider')->where('patient_id', $patient->id)->whereNotNull('follow_up_date')->orderBy('follow_up_date', 'asc')->limit(5)->get()
+                : collect();
+        }
+
+        if ($user->hasRole('nurse')) {
+            $data['triageQueue'] = \App\Models\ErQueue::with(['erVisit.patient'])
+                ->where('status', \App\Models\ErQueue::STATUS_WAITING)
+                ->orderByRaw("CASE priority
+                    WHEN 'Level 1' THEN 1
+                    WHEN 'Level 2' THEN 2
+                    WHEN 'Level 3' THEN 3
+                    WHEN 'Level 4' THEN 4
+                    WHEN 'Level 5' THEN 5
+                    ELSE 99
+                END")
+                ->orderBy('queued_at')
+                ->limit(10)
+                ->get();
+            $data['pendingAdmissions'] = Admission::with('patient')
+                ->whereIn('status', [Admission::STATUS_REQUESTED, Admission::STATUS_APPROVED])
+                ->limit(10)
+                ->get();
+        }
+
+        if ($user->hasRole('registration')) {
+            $data['registrationDeskQueue'] = Appointment::with(['patient', 'provider'])
+                ->whereDate('starts_at', today())
+                ->orderBy('starts_at', 'asc')
+                ->limit(10)
+                ->get();
+            $data['checkedInToday'] = Appointment::whereDate('starts_at', today())
+                ->where('status', 'CHECKED_IN')
+                ->count();
+        }
+
+        if ($user->hasRole('super-admin')) {
+            $data['systemAlerts'] = [
+                'Acuity board active',
+                'Bed assignments updated',
+                'Daily reporting available',
+            ];
+        }
+
+        if ($user->hasAnyRole(['super-admin', 'nurse'])) {
+            $data['pendingAdmissions'] = Admission::with('patient')
+                ->whereIn('status', [Admission::STATUS_REQUESTED, Admission::STATUS_APPROVED])
+                ->limit(10)
+                ->get();
+        }
+
+        return view('dashboard', $data);
+    }
+}
