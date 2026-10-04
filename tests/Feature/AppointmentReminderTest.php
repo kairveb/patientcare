@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Appointment;
+use App\Models\DemoRecord;
 use App\Models\Patient;
 use App\Notifications\AppointmentReminderNotification;
 use App\Services\AppointmentService;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\SendQueuedNotifications;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -35,13 +37,11 @@ class AppointmentReminderTest extends TestCase
         $this->artisan('appointments:send-reminders')->assertSuccessful();
 
         Queue::assertPushed(SendQueuedNotifications::class, 2);
-        Queue::assertPushed(SendQueuedNotifications::class, fn (SendQueuedNotifications $job): bool =>
-            $job->notification instanceof AppointmentReminderNotification
+        Queue::assertPushed(SendQueuedNotifications::class, fn (SendQueuedNotifications $job): bool => $job->notification instanceof AppointmentReminderNotification
             && $job->notification->appointment->is($oneDayAppointment)
             && $job->notification->hoursBefore === 24
         );
-        Queue::assertPushed(SendQueuedNotifications::class, fn (SendQueuedNotifications $job): bool =>
-            $job->notification instanceof AppointmentReminderNotification
+        Queue::assertPushed(SendQueuedNotifications::class, fn (SendQueuedNotifications $job): bool => $job->notification instanceof AppointmentReminderNotification
             && $job->notification->appointment->is($oneHourAppointment)
             && $job->notification->hoursBefore === 1
         );
@@ -75,6 +75,29 @@ class AppointmentReminderTest extends TestCase
         $this->assertNull($cancelledAppointment->fresh()->reminder_1h_sent_at);
     }
 
+    public function test_demo_marked_appointments_and_example_com_patient_emails_are_not_queued(): void
+    {
+        $now = now()->startOfMinute();
+        $this->travelTo($now);
+        $markedAppointment = $this->confirmedAppointment(
+            Patient::factory()->create(['email' => 'synthetic@invalid.test']),
+            $now->copy()->addHours(24)
+        );
+        DemoRecord::mark($markedAppointment, 'test:marked-appointment');
+
+        $exampleDomainAppointment = $this->confirmedAppointment(
+            Patient::factory()->create(['email' => 'synthetic@example.com']),
+            $now->copy()->addHour()
+        );
+        Queue::fake();
+
+        $this->artisan('appointments:send-reminders')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+        $this->assertNull($markedAppointment->fresh()->reminder_24h_sent_at);
+        $this->assertNull($exampleDomainAppointment->fresh()->reminder_1h_sent_at);
+    }
+
     public function test_rescheduling_resets_both_reminder_guards(): void
     {
         $appointment = Appointment::factory()->create([
@@ -92,7 +115,7 @@ class AppointmentReminderTest extends TestCase
 
     private function confirmedAppointment(
         Patient $patient,
-        \Illuminate\Support\Carbon $startsAt,
+        Carbon $startsAt,
         string $status = Appointment::STATUS_CONFIRMED
     ): Appointment {
         return Appointment::factory()->create([

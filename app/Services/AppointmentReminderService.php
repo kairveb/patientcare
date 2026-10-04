@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Models\Appointment;
+use App\Models\DemoRecord;
+use App\Models\Patient;
 use App\Notifications\AppointmentReminderNotification;
-use Throwable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 class AppointmentReminderService
 {
@@ -28,9 +31,20 @@ class AppointmentReminderService
                 ->whereNull($sentAtColumn)
                 ->where('starts_at', '>', $windowStart)
                 ->where('starts_at', '<=', $dueAt)
+                ->whereNotExists(fn ($query) => $query
+                    ->selectRaw('1')
+                    ->from('demo_records')
+                    ->whereColumn('demo_records.model_id', 'appointments.id')
+                    ->where('demo_records.model_type', (new Appointment)->getMorphClass()))
                 ->whereHas('patient', fn ($query) => $query
                     ->whereNotNull('email')
-                    ->where('email', '<>', ''))
+                    ->where('email', '<>', '')
+                    ->whereRaw('LOWER(email) NOT LIKE ?', ['%@example.com'])
+                    ->whereNotExists(fn ($demoPatients) => $demoPatients
+                        ->selectRaw('1')
+                        ->from('demo_records')
+                        ->whereColumn('demo_records.model_id', 'patients.id')
+                        ->where('demo_records.model_type', (new Patient)->getMorphClass())))
                 ->with(['patient', 'provider', 'appointmentType'])
                 ->chunkById(100, function ($appointments) use ($hoursBefore, $sentAtColumn, $windowStart, $dueAt, &$queued): void {
                     foreach ($appointments as $candidate) {
@@ -54,8 +68,8 @@ class AppointmentReminderService
         int $appointmentId,
         int $hoursBefore,
         string $sentAtColumn,
-        \Illuminate\Support\Carbon $windowStart,
-        \Illuminate\Support\Carbon $dueAt
+        Carbon $windowStart,
+        Carbon $dueAt
     ): bool {
         return DB::transaction(function () use ($appointmentId, $hoursBefore, $sentAtColumn, $windowStart, $dueAt): bool {
             $appointment = Appointment::query()
@@ -67,6 +81,7 @@ class AppointmentReminderService
                 || $appointment->status !== Appointment::STATUS_CONFIRMED
                 || $appointment->{$sentAtColumn} !== null
                 || blank($appointment->patient?->email)
+                || $this->isDemoReminderTarget($appointment)
                 || ! $appointment->starts_at->greaterThan($windowStart)
                 || $appointment->starts_at->greaterThan($dueAt)) {
                 return false;
@@ -89,5 +104,15 @@ class AppointmentReminderService
 
             return true;
         });
+    }
+
+    private function isDemoReminderTarget(Appointment $appointment): bool
+    {
+        $patient = $appointment->patient;
+        $email = strtolower(trim((string) $patient?->email));
+
+        return DemoRecord::isMarked($appointment)
+            || ($patient !== null && DemoRecord::isMarked($patient))
+            || str_ends_with($email, '@example.com');
     }
 }

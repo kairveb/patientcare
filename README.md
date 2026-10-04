@@ -255,7 +255,7 @@ php artisan db:seed --class=ReferenceDataSeeder --force
 php artisan app:create-admin
 ```
 
-Do not run `HimsSeeder`, `DatabaseSeeder`, or `DemoDataSeeder` against production. The legacy `hims:demo-accounts` command also refuses production. To provision one demo account per role, run `php artisan app:create-demo-staff --force` in an interactive production shell; it prompts for each account name/email, generates strong passwords, and prints them once. The explicit `--force` is required in production. It creates a patient-role login without a patient profile by default; pass `--with-patient` to explicitly prompt for the patient profile details as well.
+Do not run `HimsSeeder`, `DatabaseSeeder`, or `DemoDataSeeder` against production. The legacy `hims:demo-accounts` and `app:create-demo-staff` commands create a Super Admin account and are not the production demo-data workflow. Use `php artisan app:seed-demo` for four synthetic non-admin accounts and marked demo records. In production it requires both `--force` and `DEMO_MODE=true`; use the corresponding `app:purge-demo` command to remove marked records, after reviewing its dependency checks and explicitly confirming the purge.
 
 For other deployments, set the following production values:
 - `APP_ENV=production`
@@ -297,12 +297,12 @@ php artisan migrate
 
 ```bash
 php artisan db:seed --class=ReferenceDataSeeder
-php artisan db:seed --class=DemoDataSeeder
+php artisan app:seed-demo
 ```
 
-`ReferenceDataSeeder` installs required roles, permissions, departments, specialties, and appointment types. Run `DemoDataSeeder` only in local, development, or E2E environments to create fictional test accounts and workflow records. `HimsSeeder` and `php artisan db:seed` retain the compatibility behavior of calling both seeders.
+`ReferenceDataSeeder` installs required roles, permissions, departments, specialties, and appointment types. `app:seed-demo` creates marked synthetic records and four accounts without a Super Admin. Set `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD` through the deployment secret facility to supply account passwords; otherwise generated passwords are shown once by the command and must be saved. It never resets an existing account password. `DemoDataSeeder`, `HimsSeeder`, and `php artisan db:seed` remain compatibility paths for tests and isolated local/E2E environments only; do not use them in production.
 
-**Demo login (password for all):** `Password123!`
+The E2E browser tests still depend on the legacy `@coor.test` accounts and workflow examples. Use those only in a disposable, isolated E2E database; do not expose their shared demo credentials to real users.
 
 | Role | Email |
 |------|-------|
