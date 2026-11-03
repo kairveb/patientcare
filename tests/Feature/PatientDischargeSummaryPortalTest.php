@@ -103,6 +103,7 @@ class PatientDischargeSummaryPortalTest extends TestCase
         ]);
         $user->roles()->attach(Role::where('name', 'patient')->firstOrFail());
         $patient = Patient::factory()->create(['user_id' => $user->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $user);
 
         return [$user, $patient];
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Appointment;
+use App\Models\CareRequest;
 use App\Models\Encounter;
 use App\Models\Patient;
 use App\Models\TelehealthSession;
@@ -81,7 +82,34 @@ class PatientPortalController extends Controller
             ->orderByDesc('starts_at')
             ->paginate(10);
 
-        return view('patient-portal.appointments', compact('patient', 'appointments'));
+        $followUps = $patient->encounters()
+            ->with(['provider', 'appointment'])
+            ->whereNotNull('follow_up_date')
+            ->whereDate('follow_up_date', '>=', today())
+            ->orderBy('follow_up_date')
+            ->get();
+
+        return view('patient-portal.appointments', compact('patient', 'appointments', 'followUps'));
+    }
+
+    public function approvals(Request $request)
+    {
+        $patient = $request->user()->patient()->firstOrFail();
+        $requests = $patient->careRequests()
+            ->with(['encounter.provider', 'requestedBy', 'decidedBy'])
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        return view('patient-portal.approvals', compact('patient', 'requests'));
+    }
+
+    public function approval(Request $request, CareRequest $careRequest)
+    {
+        $this->authorize('view', $careRequest);
+        abort_unless($request->user()->hasRole('patient'), 403);
+        $careRequest->load(['encounter.provider', 'requestedBy', 'decidedBy', 'clinicalDocument', 'statusHistories.user']);
+
+        return view('patient-portal.approval', compact('careRequest'));
     }
 
     public function patientId(Request $request, PatientQrCodeService $qrCodes)
@@ -195,10 +223,19 @@ class PatientPortalController extends Controller
             ? $todaySessions->search($session->id)
             : false;
         $queuePosition = $queueIndex === false ? null : $queueIndex + 1;
+        $appointment = $session->appointment;
         $canJoin = $session->isLive()
-            && $hasTelehealthConsent;
+            && $hasTelehealthConsent
+            && $appointment
+            && in_array($appointment->status, [
+                \App\Models\Appointment::STATUS_CONFIRMED,
+                \App\Models\Appointment::STATUS_CHECKED_IN,
+                \App\Models\Appointment::STATUS_IN_CONSULTATION,
+            ], true)
+            && now()->gte($appointment->starts_at->copy()->subMinutes((int) config('telehealth.join_early_minutes', 15)))
+            && now()->lte($appointment->ends_at->copy()->addMinutes((int) config('telehealth.join_late_minutes', 30)));
         $joinUrl = $canJoin
-            ? route('telehealth.join', ['session' => $session, 'token' => $session->secureJoinToken()])
+            ? route('telehealth.join', ['session' => $session])
             : null;
 
         if ($request->is('api/*') || $request->expectsJson()) {

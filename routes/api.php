@@ -36,6 +36,7 @@ use App\Http\Controllers\TriageReassessmentController;
 use App\Http\Controllers\OpdVitalsController;
 use App\Http\Middleware\TrackInactivity;
 use App\Http\Middleware\EnsureActiveUser;
+use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
@@ -49,6 +50,10 @@ Route::prefix('v1')->group(function () {
     // Public auth
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('/auth/login', [ApiAuthController::class, 'login']);
+        Route::post('/auth/verify-otp', [ApiAuthController::class, 'verifyOtp'])
+            ->middleware('throttle:10,1');
+        Route::post('/auth/resend-otp', [ApiAuthController::class, 'resendOtp'])
+            ->middleware('throttle:3,1');
     });
 
     Route::prefix('/address-data/philippines')->middleware('throttle:60,1')->group(function () {
@@ -61,12 +66,23 @@ Route::prefix('v1')->group(function () {
         Route::get('/sub-municipalities/{parent}/barangays', [PhilippineAddressDataController::class, 'barangays']);
     });
 
-    Route::middleware(['auth:sanctum', EnsureActiveUser::class])->get('/dashboard', DashboardApiController::class);
+    Route::middleware(['auth:sanctum', EnsureActiveUser::class, EnsureCurrentPrivacyAcceptance::class])
+        ->get('/dashboard', DashboardApiController::class);
 
     // Authenticated routes
-    Route::middleware([EnsureFrontendRequestsAreStateful::class, 'auth:sanctum', EnsureActiveUser::class, TrackInactivity::class, 'throttle:120,1'])->group(function () {
-        Route::post('/auth/logout', [ApiAuthController::class, 'logout']);
-        Route::get('/auth/me', [ApiAuthController::class, 'me']);
+    Route::middleware([
+        EnsureFrontendRequestsAreStateful::class,
+        'auth:sanctum',
+        EnsureActiveUser::class,
+        TrackInactivity::class,
+        EnsureCurrentPrivacyAcceptance::class,
+        'throttle:120,1',
+    ])->group(function () {
+        Route::post('/auth/logout', [ApiAuthController::class, 'logout'])->name('api.v1.auth.logout');
+        Route::get('/auth/me', [ApiAuthController::class, 'me'])->name('api.v1.auth.me');
+        Route::post('/privacy/acceptance', [ApiAuthController::class, 'acceptPrivacy'])
+            ->middleware('throttle:10,1')
+            ->name('api.v1.privacy.acceptance');
 
         // Patients
         Route::middleware(['can:view-patients', 'throttle:patient-search'])->group(function () {
@@ -125,10 +141,10 @@ Route::prefix('v1')->group(function () {
         });
         Route::post('/appointments/{appointment}/vitals', [OpdVitalsController::class, 'store'])
             ->middleware(['can:view-appointments', 'role:nurse', 'throttle:30,1']);
-        Route::middleware(['can:create-appointments', 'role:registration,super-admin,patient', 'throttle:30,1'])->group(function () {
+        Route::middleware(['can:create-appointments', 'role:admin,registration,super-admin,patient', 'throttle:30,1'])->group(function () {
             Route::post('/appointments', [AppointmentApiController::class, 'store']);
         });
-        Route::middleware(['can:update-appointments', 'role:registration,super-admin', 'throttle:30,1'])->group(function () {
+        Route::middleware(['can:update-appointments', 'role:admin,registration,super-admin', 'throttle:30,1'])->group(function () {
             Route::patch('/appointments/{id}', [AppointmentApiController::class, 'update']);
         });
         Route::middleware(['can:cancel-appointments', 'throttle:30,1'])->group(function () {
@@ -141,6 +157,9 @@ Route::prefix('v1')->group(function () {
                 ->middleware('throttle:patient-reference-workflow');
             Route::post('/appointments/{id}/no-show', [AppointmentApiController::class, 'markNoShow']);
         });
+        Route::middleware(['can:view-appointments', 'role:nurse,registration,admin,super-admin', 'throttle:30,1'])
+            ->post('/appointments/{appointment}/decision', [AppointmentApiController::class, 'decide'])
+            ->name('api.v1.appointments.decision');
 
         // Encounters
         Route::middleware(['can:viewAny,App\Models\Encounter', 'throttle:encounter-read'])->group(function () {
@@ -224,7 +243,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/provider-schedules', [ProviderScheduleApiController::class, 'index']);
             Route::get('/provider-schedules/{id}', [ProviderScheduleApiController::class, 'show']);
         });
-        Route::middleware(['can:manage-provider-schedules', 'role:super-admin'])->group(function () {
+        Route::middleware(['can:manage-provider-schedules', 'role:admin,super-admin'])->group(function () {
             Route::post('/provider-schedules', [ProviderScheduleApiController::class, 'store']);
             Route::patch('/provider-schedules/{id}', [ProviderScheduleApiController::class, 'update']);
             Route::post('/provider-schedules/{id}/generate-slots', [ProviderScheduleApiController::class, 'generateSlots']);

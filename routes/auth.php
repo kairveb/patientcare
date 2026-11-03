@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
+use App\Http\Controllers\Auth\ReportPasswordConfirmationController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
@@ -26,7 +27,11 @@ Route::middleware('guest')->group(function () {
     Route::get('mfa/challenge', [AuthenticatedSessionController::class, 'mfaChallenge'])
         ->name('mfa.challenge');
     Route::post('mfa/challenge', [AuthenticatedSessionController::class, 'mfaVerify'])
+        ->middleware('throttle:20,1')
         ->name('mfa.verify');
+    Route::post('mfa/resend', [AuthenticatedSessionController::class, 'mfaResend'])
+        ->middleware('throttle:3,1')
+        ->name('mfa.resend');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
@@ -42,6 +47,9 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', EnsureActiveUser::class])->group(function () {
+    Route::post('session/heartbeat', [AuthenticatedSessionController::class, 'heartbeat'])
+        ->middleware('throttle:12,1')
+        ->name('session.heartbeat');
     Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
 
@@ -56,7 +64,7 @@ Route::middleware(['auth', EnsureActiveUser::class])->group(function () {
     Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
         ->name('password.confirm');
 
-    Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
+    Route::post('confirm-password', [ReportPasswordConfirmationController::class, 'store']);
 
     Route::put('password', [PasswordController::class, 'update'])->name('password.update');
 

@@ -19,7 +19,7 @@ final class QueueStatus
     {
         return match (strtoupper((string) $status)) {
             'COMPLETED' => 'success',
-            'CANCELLED', 'NO-SHOW', 'NO_SHOW' => 'danger',
+            'CANCELLED', 'REJECTED', 'NO-SHOW', 'NO_SHOW' => 'danger',
             'PENDING', 'BOOKED', 'WAITING', 'QUEUED', 'CHECKED-IN', 'CHECKED_IN' => 'warning',
             'SEEN' => 'success',
             'IN_CONSULT', 'IN-CONSULT', 'IN CONSULT' => 'warning',

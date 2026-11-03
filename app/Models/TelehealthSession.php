@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class TelehealthSession extends Model
 {
     protected $guarded = [];
+    protected $hidden = ['host_start_url', 'join_url', 'zoom_meeting_id', 'meeting_passcode'];
 
     protected $casts = [
         'start_time' => 'datetime',
         'escalated_at' => 'datetime',
+        'meeting_passcode' => 'encrypted',
     ];
 
     public const STATUS_NOT_CONFIGURED = 'NOT_CONFIGURED';
@@ -32,6 +34,11 @@ class TelehealthSession extends Model
     public function participants(): HasMany
     {
         return $this->hasMany(TelehealthParticipant::class);
+    }
+
+    public function joinTokens(): HasMany
+    {
+        return $this->hasMany(TelehealthJoinToken::class);
     }
 
     public function prescriptions(): HasMany

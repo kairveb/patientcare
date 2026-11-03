@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\AppointmentSlot;
+use App\Models\Provider;
 use App\Models\ProviderSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SchedulingService
 {
@@ -14,36 +16,41 @@ class SchedulingService
      */
     public function generateSlots(ProviderSchedule $schedule, string $fromDate, string $toDate): int
     {
-        $count = 0;
-        $start = Carbon::parse($fromDate);
-        $end = Carbon::parse($toDate);
+        return DB::transaction(function () use ($schedule, $fromDate, $toDate): int {
+            Provider::query()->whereKey($schedule->provider_id)->lockForUpdate()->firstOrFail();
+            $count = 0;
+            $start = Carbon::parse($fromDate);
+            $end = Carbon::parse($toDate);
 
-        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if (!$this->shouldGenerateForDate($schedule, $date)) {
-                continue;
-            }
-
-            $slotStart = $date->copy()->setTimeFromTimeString($schedule->start_time);
-            $slotEnd = $date->copy()->setTimeFromTimeString($schedule->end_time);
-            $duration = $schedule->slot_duration ?: 30;
-
-            while ($slotStart->addMinutes($duration)->lte($slotEnd)) {
-                $blockStart = $slotStart->copy()->subMinutes($duration);
-                $blockEnd = $slotStart->copy();
-
-                if ($this->isInBreakWindow($schedule, $date, $blockStart, $blockEnd)) {
+            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                if (! $this->shouldGenerateForDate($schedule, $date)) {
                     continue;
                 }
 
-                AppointmentSlot::firstOrCreate(
-                    ['provider_id' => $schedule->provider_id, 'starts_at' => $blockStart],
-                    ['ends_at' => $blockEnd, 'status' => AppointmentSlot::STATUS_AVAILABLE]
-                );
-                $count++;
-            }
-        }
+                $slotStart = $date->copy()->setTimeFromTimeString($schedule->start_time);
+                $slotEnd = $date->copy()->setTimeFromTimeString($schedule->end_time);
+                $duration = $schedule->slot_duration ?: 30;
 
-        return $count;
+                while ($slotStart->copy()->addMinutes($duration)->lte($slotEnd)) {
+                    $blockStart = $slotStart->copy();
+                    $blockEnd = $blockStart->copy()->addMinutes($duration);
+                    $slotStart = $blockEnd->copy();
+
+                    if ($this->isInBreakWindow($schedule, $date, $blockStart, $blockEnd)
+                        || $this->providerIsUnavailable((int) $schedule->provider_id, $blockStart, $blockEnd)) {
+                        continue;
+                    }
+
+                    $slot = AppointmentSlot::firstOrCreate(
+                        ['provider_id' => $schedule->provider_id, 'starts_at' => $blockStart],
+                        ['ends_at' => $blockEnd, 'status' => AppointmentSlot::STATUS_AVAILABLE]
+                    );
+                    $count += (int) $slot->wasRecentlyCreated;
+                }
+            }
+
+            return $count;
+        });
     }
 
     protected function shouldGenerateForDate(ProviderSchedule $schedule, Carbon $date): bool
@@ -120,7 +127,17 @@ class SchedulingService
         return AppointmentSlot::where('provider_id', $providerId)
             ->whereDate('starts_at', $date)
             ->where('status', AppointmentSlot::STATUS_AVAILABLE)
-            ->when($appointmentTypeId, fn ($q) => $q->where('appointment_type_id', $appointmentTypeId))
+            ->whereNotExists(function ($query) use ($providerId): void {
+                $query->selectRaw('1')
+                    ->from('provider_unavailabilities')
+                    ->where('provider_unavailabilities.provider_id', $providerId)
+                    ->whereColumn('provider_unavailabilities.starts_at', '<', 'appointment_slots.ends_at')
+                    ->whereColumn('provider_unavailabilities.ends_at', '>', 'appointment_slots.starts_at');
+            })
+            ->when($appointmentTypeId, fn ($q) => $q->where(function ($typeQuery) use ($appointmentTypeId): void {
+                $typeQuery->whereNull('appointment_type_id')
+                    ->orWhere('appointment_type_id', $appointmentTypeId);
+            }))
             ->orderBy('starts_at');
     }
 
@@ -131,14 +148,8 @@ class SchedulingService
     {
         $query = \App\Models\Appointment::where('provider_id', $providerId)
             ->whereIn('status', ['PENDING', 'CONFIRMED', 'CHECKED-IN', 'IN-CONSULTATION'])
-            ->where(function ($q) use ($startsAt, $endsAt) {
-                $q->whereBetween('starts_at', [$startsAt, $endsAt->copy()->subSecond()])
-                    ->orWhereBetween('ends_at', [$startsAt->copy()->addSecond(), $endsAt])
-                    ->orWhere(function ($q) use ($startsAt, $endsAt) {
-                        $q->where('starts_at', '<=', $startsAt)
-                            ->where('ends_at', '>=', $endsAt);
-                    });
-            });
+            ->where('starts_at', '<', $endsAt)
+            ->where('ends_at', '>', $startsAt);
 
         if ($ignoreAppointmentId) {
             $query->where('id', '!=', $ignoreAppointmentId);
@@ -148,22 +159,61 @@ class SchedulingService
     }
 
     /**
-     * Atomically reserve a slot. Returns true if successfully claimed.
+     * Serialize appointment changes for a provider within the surrounding transaction.
      */
-    public function claimSlot(int $slotId): bool
+    public function lockProvider(int $providerId): Provider
     {
-        return DB::transaction(function () use ($slotId) {
-            return $this->claimAvailableSlot($slotId);
-        });
+        return Provider::query()->whereKey($providerId)->lockForUpdate()->firstOrFail();
     }
 
-    protected function claimAvailableSlot(int $slotId): bool
+    /**
+     * Lock and reserve the exact available slot selected by the client.
+     */
+    public function reserveSlot(int $slotId, int $providerId, Carbon $startsAt, ?int $duration = null): AppointmentSlot
     {
-        $updated = AppointmentSlot::where('id', $slotId)
-            ->where('status', AppointmentSlot::STATUS_AVAILABLE)
-            ->lockForUpdate()
-            ->update(['status' => AppointmentSlot::STATUS_BOOKED]);
+        Provider::query()->whereKey($providerId)->lockForUpdate()->firstOrFail();
+        $slot = AppointmentSlot::query()->whereKey($slotId)->lockForUpdate()->first();
 
-        return $updated > 0;
+        if (! $slot
+            || (int) $slot->provider_id !== $providerId
+            || ! $slot->starts_at->equalTo($startsAt)
+            || $slot->ends_at->lessThanOrEqualTo($slot->starts_at)
+            || $slot->status !== AppointmentSlot::STATUS_AVAILABLE) {
+            throw ValidationException::withMessages([
+                'appointment_slot_id' => 'The selected appointment slot is unavailable or does not match the selected provider and time.',
+            ]);
+        }
+        if ($this->providerIsUnavailable($providerId, $slot->starts_at, $slot->ends_at)) {
+            $slot->update(['status' => AppointmentSlot::STATUS_BLOCKED]);
+            throw ValidationException::withMessages([
+                'appointment_slot_id' => 'The selected provider is unavailable during this time.',
+            ]);
+        }
+
+        $slotDuration = (int) $slot->starts_at->diffInMinutes($slot->ends_at);
+        if ($slotDuration < 5 || $slotDuration > 240) {
+            throw ValidationException::withMessages([
+                'appointment_slot_id' => 'The selected appointment slot has an invalid duration.',
+            ]);
+        }
+
+        if ($duration !== null && $duration !== $slotDuration) {
+            throw ValidationException::withMessages([
+                'duration' => 'The selected duration does not match the appointment slot.',
+            ]);
+        }
+
+        $slot->update(['status' => AppointmentSlot::STATUS_BOOKED]);
+
+        return $slot;
+    }
+
+    public function providerIsUnavailable(int $providerId, Carbon $startsAt, Carbon $endsAt): bool
+    {
+        return DB::table('provider_unavailabilities')
+            ->where('provider_id', $providerId)
+            ->where('starts_at', '<', $endsAt)
+            ->where('ends_at', '>', $startsAt)
+            ->exists();
     }
 }

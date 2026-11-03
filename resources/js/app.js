@@ -240,9 +240,92 @@ const initializeFilterPanels = () => {
     });
 };
 
+const initializeAppointmentSlotPickers = () => {
+    const requests = new WeakMap();
+
+    document.addEventListener('change', async (event) => {
+        if (event.target.matches('[data-slot-id]')) {
+            const form = event.target.closest('[data-appointment-slot-picker]');
+            if (form) {
+                form.querySelector('[name="starts_at"]').value = event.target.dataset.startsAt;
+            }
+            return;
+        }
+
+        if (!event.target.matches('[data-slot-date], [data-slot-provider]')) {
+            return;
+        }
+
+        const form = event.target.closest('[data-appointment-slot-picker]');
+        if (!form) {
+            return;
+        }
+
+        requests.get(form)?.abort();
+        const results = form.querySelector('[data-slot-results]');
+        const startsAt = form.querySelector('[name="starts_at"]');
+        form.querySelector('[data-prefilled-slot]')?.remove();
+        if (startsAt) {
+            startsAt.value = '';
+        }
+        const providerId = form.dataset.providerId || form.querySelector('[data-slot-provider]')?.value;
+        const date = form.querySelector('[data-slot-date]')?.value;
+        results.replaceChildren();
+        startsAt.value = '';
+
+        if (!providerId || !date) {
+            return;
+        }
+
+        const controller = new AbortController();
+        requests.set(form, controller);
+
+        try {
+            const params = new URLSearchParams({ provider_id: providerId, date });
+            const response = await fetch(`${form.dataset.slotsUrl}?${params}`, {
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                throw new Error('Slot lookup failed.');
+            }
+
+            const payload = await response.json();
+            if (!payload.data?.length) {
+                results.textContent = 'No available slots for that date.';
+                return;
+            }
+
+            payload.data.forEach((slot) => {
+                const label = document.createElement('label');
+                label.className = 'mr-2 inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1';
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'appointment_slot_id';
+                radio.value = slot.id;
+                radio.required = true;
+                radio.dataset.slotId = '';
+                radio.dataset.startsAt = slot.starts_at;
+                const time = document.createElement('span');
+                time.textContent = new Date(slot.starts_at).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+                label.append(radio, time);
+                results.appendChild(label);
+            });
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                results.textContent = 'Could not load appointment slots. Please try again.';
+            }
+        }
+    });
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('input[data-phone-input]').forEach(enforcePhilippinePhoneInput);
     initializeFilterPanels();
+    initializeAppointmentSlotPickers();
     listenForEmergencyAlerts();
 });
 

@@ -14,10 +14,13 @@ class SymptomCheck extends Model
         'vitals' => 'encrypted:array',
         'ai_reasons' => 'encrypted:array',
         'red_flags' => 'encrypted:array',
+        'ai_result' => 'encrypted:array',
         'requires_er' => 'boolean',
+        'rule_overrode_ai' => 'boolean',
         'age' => 'integer',
         'urgency_score' => 'integer',
         'ai_confidence' => 'integer',
+        'clinician_reviewed_at' => 'datetime',
     ];
 
     public function patient(): BelongsTo
@@ -28,5 +31,10 @@ class SymptomCheck extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function clinicianReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'clinician_reviewed_by');
     }
 }

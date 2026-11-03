@@ -20,6 +20,7 @@ class DoctorQueueAccessTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -67,6 +68,7 @@ class DoctorQueueAccessTest extends TestCase
     public function test_patient_cannot_access_the_opd_queue(): void
     {
         $patient = User::where('email', 'patient@coor.test')->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patient->patient, $patient);
 
         $this->actingAs($patient)
             ->get(route('doctors.queue'))

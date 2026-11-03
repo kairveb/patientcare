@@ -6,6 +6,7 @@ use App\Models\Patient;
 use App\Models\PreArrivalProfile;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\PatientConsentService;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -43,11 +44,13 @@ class PortalPreRegistrationTest extends TestCase
             'email' => 'jane.patient@example.test',
             'verified' => true,
         ]);
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $user, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $user, 'self');
 
         $getResponse = $this->actingAs($user, 'web')->get('/portal/pre-register');
         $getResponse->assertOk();
         $getResponse->assertSee('Pre-registration');
-        $getResponse->assertSee(config('consents.types.DATA_PRIVACY.text'));
+        $getResponse->assertDontSee('name="data_privacy_consent"', false);
 
         $postResponse = $this->withSession(['_token' => 'test-token'])
             ->actingAs($user, 'web')
@@ -628,7 +631,7 @@ class PortalPreRegistrationTest extends TestCase
         $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->syncWithoutDetaching([$role->id]);
 
-        Patient::create([
+        $patient = Patient::create([
             'user_id' => $user->id,
             'mrn' => 'MRN-ACCESS-001',
             'first_name' => 'Access',
@@ -639,6 +642,8 @@ class PortalPreRegistrationTest extends TestCase
             'email' => 'access.patient@example.test',
             'verified' => true,
         ]);
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $user, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $user, 'self');
 
         $response = $this->actingAs($user, 'web')->get('/telehealth');
 
@@ -652,7 +657,7 @@ class PortalPreRegistrationTest extends TestCase
         $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->syncWithoutDetaching([$role->id]);
 
-        Patient::create([
+        $patient = Patient::create([
             'user_id' => $user->id,
             'mrn' => 'MRN-ACCESS-002',
             'first_name' => 'Portal',
@@ -663,6 +668,8 @@ class PortalPreRegistrationTest extends TestCase
             'email' => 'portal.patient@example.test',
             'verified' => true,
         ]);
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $user, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $user, 'self');
 
         $dashboard = $this->actingAs($user, 'web')->get('/dashboard');
         $dashboard->assertDontSee('Register Patient');

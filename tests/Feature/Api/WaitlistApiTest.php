@@ -43,6 +43,12 @@ class WaitlistApiTest extends TestCase
             ->assertJsonPath('data.status', 'WAITING');
 
         $this->assertDatabaseHas('waitlists', ['patient_id' => $patient->id, 'provider_id' => $provider->id]);
+
+        $this->postJson('/api/v1/waitlists', [
+            'patient_id' => $patient->id,
+            'provider_id' => $provider->id,
+            'status' => Waitlist::STATUS_OFFERED,
+        ])->assertUnprocessable()->assertJsonValidationErrors('status');
     }
 
     public function test_patient_can_only_read_create_and_update_own_waitlist_entries(): void
@@ -52,6 +58,7 @@ class WaitlistApiTest extends TestCase
         $ownPatient = Patient::factory()->linkedTo($patientUser)->create();
         $otherPatient = Patient::factory()->create();
         $provider = Provider::firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($ownPatient, $patientUser);
 
         $ownEntry = Waitlist::create([
             'patient_id' => $ownPatient->id,
@@ -87,8 +94,13 @@ class WaitlistApiTest extends TestCase
             'provider_id' => $provider->id,
         ])->assertCreated();
         $this->patchJson("/api/v1/waitlists/{$ownEntry->id}", ['status' => Waitlist::STATUS_OFFERED])
-            ->assertOk();
-        $this->assertSame(Waitlist::STATUS_OFFERED, $ownEntry->fresh()->status);
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+        $this->assertSame(Waitlist::STATUS_WAITING, $ownEntry->fresh()->status);
+        $this->patchJson("/api/v1/waitlists/{$ownEntry->id}", ['status' => Waitlist::STATUS_REMOVED])
+            ->assertOk()
+            ->assertJsonPath('data.status', Waitlist::STATUS_REMOVED);
+        $this->assertSame(Waitlist::STATUS_REMOVED, $ownEntry->fresh()->status);
     }
 
     public function test_doctors_and_nurses_cannot_mutate_waitlists(): void

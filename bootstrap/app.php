@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
             'cors' => \App\Http\Middleware\AllowCors::class,
+            'report.password.confirm' => \App\Http\Middleware\EnsureRecentReportPasswordConfirmation::class,
         ]);
 
         $middleware->prependToGroup('web', [

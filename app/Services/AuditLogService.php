@@ -49,6 +49,14 @@ class AuditLogService
         return $this->log('VIEW_PATIENT', 'patient', $id);
     }
 
+    public function viewPatientClinicalData(int $patientId, string $resourceType, int $resourceId): AuditLog
+    {
+        return $this->log('VIEW_PATIENT_CLINICAL_DATA', 'patient', $patientId, 'SUCCESS', [
+            'resource_type' => $resourceType,
+            'resource_id' => $resourceId,
+        ]);
+    }
+
     public function createAppointment(int $id, ?array $meta = null): AuditLog
     {
         return $this->log('CREATE_APPOINTMENT', 'appointment', $id, 'SUCCESS', $meta);

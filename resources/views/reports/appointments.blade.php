@@ -10,6 +10,7 @@
     </div>
 
     @include('reports._date-form')
+    @include('reports._export-links', ['report' => 'appointments'])
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="p-5 bg-white rounded-xl border border-slate-200"><div class="text-3xl font-bold">{{ $total }}</div><div class="text-sm text-slate-500">Total</div></div>

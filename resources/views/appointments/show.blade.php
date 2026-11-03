@@ -53,8 +53,12 @@
             </div>
             <div>
                 <h3 class="text-xs uppercase tracking-wider text-slate-500 mb-3">Status</h3>
-                <span class="px-3 py-1 text-sm rounded-full {{ $appointment->status === 'COMPLETED' ? 'bg-green-100 text-green-700' : ($appointment->status === 'CANCELLED' || $appointment->status === 'NO-SHOW' ? 'bg-red-100 text-red-700' : 'bg-teal-100 text-teal-700') }}">{{ $appointment->status }}</span>
+                <span class="px-3 py-1 text-sm rounded-full {{ $appointment->status === 'COMPLETED' ? 'bg-green-100 text-green-700' : (in_array($appointment->status, ['CANCELLED', 'REJECTED', 'NO-SHOW'], true) ? 'bg-red-100 text-red-700' : 'bg-teal-100 text-teal-700') }}">{{ $appointment->status }}</span>
                 <p class="text-sm text-slate-500 mt-2">Type: {{ $appointment->appointmentType->name ?? '—' }}</p>
+                <p class="text-sm text-slate-500">Booking source: {{ str_replace('_', ' ', $appointment->booking_source) }}</p>
+                @if ($appointment->parent_appointment_id)
+                    <p class="text-sm text-blue-700">Follow-up to {{ $appointment->parentAppointment?->appointment_number ?? 'previous appointment' }}</p>
+                @endif
             </div>
         </div>
         @if ($appointment->reason)
@@ -82,16 +86,14 @@
         {{-- Reschedule --}}
         <div class="bg-white rounded-xl border border-slate-200 p-6">
             <h3 class="font-semibold text-slate-800 mb-3">Reschedule Appointment</h3>
-            <form method="POST" action="{{ route('appointments.reschedule', $appointment) }}" class="flex flex-wrap gap-3 items-end">
+            <form method="POST" action="{{ route('appointments.reschedule', $appointment) }}" class="flex flex-wrap gap-3 items-end" data-appointment-slot-picker data-provider-id="{{ $appointment->provider_id }}" data-slots-url="{{ route('appointments.slots') }}">
                 @csrf
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">New Date &amp; Time</label>
-                    <input type="datetime-local" name="starts_at" required class="px-3 py-2 text-sm border border-slate-300 rounded-lg">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">New Date</label>
+                    <input type="date" data-slot-date required class="px-3 py-2 text-sm border border-slate-300 rounded-lg">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Duration (min)</label>
-                    <input type="number" name="duration" value="30" class="px-3 py-2 text-sm border border-slate-300 rounded-lg w-28">
-                </div>
+                <div data-slot-results class="w-full text-sm text-slate-600" aria-live="polite"></div>
+                <input type="hidden" name="starts_at" value="">
                 <button type="submit" class="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-900">Reschedule</button>
             </form>
         </div>

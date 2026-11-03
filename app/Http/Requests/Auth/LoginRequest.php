@@ -2,10 +2,11 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
+use App\Services\AuditLogService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -13,104 +14,114 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'identifier' => trim((string) ($this->input('identifier') ?? $this->input('email', ''))),
+        ]);
+    }
+
     /**
-     * Get the validation rules that apply to the request.
-     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'identifier' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ];
     }
 
-/**
-     * Attempt to authenticate the request's credentials.
-     *
-     * @throws ValidationException
-     */
     public function authenticate(): void
     {
-        $this->ensureIsNotRateLimited();
+        $user = $this->findAccount();
+        $this->ensureIsNotRateLimited($user);
 
-        $credentials = $this->only('email', 'password');
+        if (! $user || ! $user->is_active || ! Hash::check($this->string('password')->value(), $user->password)) {
+            app(AuditLogService::class)->log('LOGIN_FAILURE', 'authentication', $user?->id, 'FAILURE');
+            $attempts = RateLimiter::hit(
+                $this->throttleKey($user),
+                (int) config('security.login_lockout_minutes', 2) * 60
+            );
 
-        $attempt = Auth::attempt([...$credentials, 'is_active' => true], false);
+            if ($attempts >= (int) config('security.login_max_attempts', 5)) {
+                $this->recordLockout($user);
+                $this->throwLockout($user);
+            }
 
-        if (! $attempt) {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
-            ]);
+            throw ValidationException::withMessages(['email' => trans('auth.failed')]);
         }
 
-        RateLimiter::clear($this->throttleKey());
-
-        $user = Auth::user();
-        if ($user) {
-            $user->forceFill(['last_activity_at' => now()])->save();
-        }
-
-        // If the authenticated user has MFA enabled we do NOT finalize the
-        // session here. Instead we stash their identity in the session and
-        // require a TOTP code on the challenge screen before login completes.
-        if ($user && $user->hasMfaEnabled()) {
-            $this->session()->put('mfa', [
-                'id' => $user->getKey(),
-                'secret' => $user->mfa_secret,
-                'verified' => true,
-                'started_at' => now()->timestamp,
-            ]);
-        }
+        RateLimiter::clear($this->throttleKey($user));
+        $this->session()->put('login_challenge', [
+            'id' => $user->getKey(),
+            'method' => $user->hasMfaEnabled() ? 'totp' : null,
+            'started_at' => now()->timestamp,
+        ]);
     }
 
-    /**
-     * Whether the authenticated user must complete an MFA challenge.
-     */
-    public function mfaRequired(): bool
+    public function challengeRequired(): bool
     {
-        return $this->session()->has('mfa');
+        return $this->session()->has('login_challenge');
     }
 
-    /**
-     * Ensure the login request is not rate limited.
-     *
-     * @throws ValidationException
-     */
-    public function ensureIsNotRateLimited(): void
+    public function challengeUser(): ?User
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        $challenge = $this->session()->get('login_challenge');
+
+        return is_array($challenge) && isset($challenge['id'])
+            ? User::query()->find($challenge['id'])
+            : null;
+    }
+
+    public function ensureIsNotRateLimited(?User $user = null): void
+    {
+        $maximum = (int) config('security.login_max_attempts', 5);
+        if (! RateLimiter::tooManyAttempts($this->throttleKey($user), $maximum)) {
             return;
         }
 
         event(new Lockout($this));
-
-        $seconds = RateLimiter::availableIn($this->throttleKey());
-
-        throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
-        ]);
+        $this->recordLockout($user);
+        $this->throwLockout($user);
     }
 
-    /**
-     * Get the rate limiting throttle key for the request.
-     */
-    public function throttleKey(): string
+    public function throttleKey(?User $user = null): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        $identifier = Str::lower($this->string('identifier')->trim()->value());
+
+        $subject = $user ? 'user:'.$user->id : 'identifier:'.$identifier;
+
+        return 'login:'.Str::transliterate($subject.'|'.$this->ip());
+    }
+
+    private function findAccount(): ?User
+    {
+        $identifier = Str::lower($this->string('identifier')->trim()->value());
+
+        return User::query()
+            ->where(fn ($query) => $query->whereRaw('LOWER(email) = ?', [$identifier])
+                ->orWhereRaw('LOWER(username) = ?', [$identifier]))
+            ->first();
+    }
+
+    private function recordLockout(?User $user): void
+    {
+        app(AuditLogService::class)->log('LOGIN_LOCKOUT', 'authentication', $user?->id, 'FAILURE');
+    }
+
+    private function throwLockout(?User $user): never
+    {
+        $seconds = RateLimiter::availableIn($this->throttleKey($user));
+        $minutes = max(1, (int) ceil($seconds / 60));
+
+        throw ValidationException::withMessages([
+            'email' => ["Too many failed sign-in attempts. Try again in {$minutes} minute(s)."],
+        ]);
     }
 }

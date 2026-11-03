@@ -17,9 +17,10 @@ class AdminUserController extends Controller
     private const MANAGED_ROLES = [
         'super-admin' => 'Super Admin',
         'patient' => 'Patient',
-        'nurse' => 'Nurse',
+        'nurse' => 'Staff',
         'doctor' => 'Doctor',
-        'registration' => 'Registration Staff',
+        'registration' => 'Staff',
+        'admin' => 'Admin',
     ];
 
     public function __construct(protected UserAdministrationService $users)
@@ -28,22 +29,25 @@ class AdminUserController extends Controller
 
     public function index(): View
     {
-        $users = User::query()->with(['roles', 'patient'])->orderBy('name')->paginate(20);
+        $query = User::query()->with(['roles', 'patient'])->orderBy('name');
+        if (auth()->user()->hasRole('admin') && ! auth()->user()->hasRole('super-admin')) {
+            $query->whereDoesntHave('roles', fn ($roles) => $roles->where('name', 'super-admin'));
+        }
 
         return view('admin.users.index', [
-            'users' => $users,
-            'managedRoles' => self::MANAGED_ROLES,
+            'users' => $query->paginate(20),
+            'managedRoles' => $this->managedRoles(),
         ]);
     }
 
     public function create(): View
     {
-        return view('admin.users.create', ['managedRoles' => self::MANAGED_ROLES]);
+        return view('admin.users.create', ['managedRoles' => $this->managedRoles()]);
     }
 
     public function store(AdminCreateUserRequest $request): RedirectResponse
     {
-        $user = $this->users->create($request->validated());
+        $user = $this->users->create($request->validated(), $request->user());
         event(new Registered($user));
 
         return redirect()->route('admin.users.index')->with('success', 'User account created.');
@@ -61,5 +65,14 @@ class AdminUserController extends Controller
         $this->users->setActive($user, $request->boolean('is_active'), $request->user());
 
         return back()->with('success', $request->boolean('is_active') ? 'User account activated.' : 'User account deactivated.');
+    }
+
+    private function managedRoles(): array
+    {
+        if (auth()->user()->hasRole('admin') && ! auth()->user()->hasRole('super-admin')) {
+            return array_diff_key(self::MANAGED_ROLES, ['super-admin' => true]);
+        }
+
+        return self::MANAGED_ROLES;
     }
 }

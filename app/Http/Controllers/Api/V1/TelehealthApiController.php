@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use RuntimeException;
 
 class TelehealthApiController extends Controller
 {
@@ -82,21 +83,32 @@ class TelehealthApiController extends Controller
             'Only the assigned doctor or a Super Admin can create this telehealth session.'
         );
 
-        $session = $this->telehealthService->createSession($appointment);
+        try {
+            $session = $this->telehealthService->createSession($appointment);
+        } catch (RuntimeException $exception) {
+            report($exception);
 
+            return response()->json([
+                'success' => false,
+                'message' => 'The video consultation could not be prepared. Please try again or contact support.',
+            ], 503);
+        }
+
+        $provider = $this->telehealthService->providerName();
         $configured = $this->telehealthService->isConfigured();
 
         return response()->json([
             'success' => true,
             'message' => $session->zoom_meeting_id
                 ? 'Telehealth session created successfully.'
-                : 'Telehealth session created with a protected local room because a Zoom meeting is unavailable.',
+                : 'Demo telehealth session created. This mode is not for real patient consultations.',
             'data' => $this->patientSafeSessionData($session, $request),
             'integration' => [
+                'provider' => $provider,
                 'zoom_enabled' => $configured,
                 'status' => $session->zoom_meeting_id
                     ? 'CONFIGURED'
-                    : ($configured ? 'FALLBACK_LOCAL' : 'NOT_CONFIGURED'),
+                    : ($provider === 'jitsi_demo' ? 'DEMO' : 'CONFIGURED'),
             ],
         ], 201);
     }
@@ -154,7 +166,7 @@ class TelehealthApiController extends Controller
     private function patientSafeSessionData(TelehealthSession $session, Request $request): array
     {
         $data = $session->toArray();
-        unset($data['host_start_url'], $data['join_url'], $data['zoom_meeting_id']);
+        unset($data['host_start_url'], $data['join_url'], $data['zoom_meeting_id'], $data['meeting_passcode']);
 
         $user = $request->user();
         $isAssignedDoctor = $user?->hasRole('doctor')
@@ -170,7 +182,7 @@ class TelehealthApiController extends Controller
             && $session->appointment?->patient
             && $this->consents->hasCurrentGrant($session->appointment->patient, 'TELEHEALTH')
         ) {
-            $data['join_url'] = route('telehealth.join', ['session' => $session, 'token' => $session->secureJoinToken()]);
+            $data['join_url'] = route('telehealth.join', ['session' => $session]);
         }
 
         return $data;

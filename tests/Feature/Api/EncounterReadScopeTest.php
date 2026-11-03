@@ -87,6 +87,7 @@ class EncounterReadScopeTest extends TestCase
         $author = User::where('email', 'doctor@coor.test')->firstOrFail();
         $this->createNote($own, $author);
         $this->createNote($foreign, $author);
+        $this->acceptRequiredPrivacyDocuments($ownPatient, $patientUser);
 
         Sanctum::actingAs($patientUser);
 

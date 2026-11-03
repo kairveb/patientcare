@@ -9,7 +9,11 @@ class TelehealthParticipant extends Model
 {
     protected $guarded = [];
 
-    protected $casts = ['joined_at' => 'datetime'];
+    protected $casts = [
+        'joined_at' => 'datetime',
+        'left_at' => 'datetime',
+        'privacy_acknowledged_at' => 'datetime',
+    ];
 
     public function telehealthSession(): BelongsTo
     {

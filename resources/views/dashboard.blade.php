@@ -20,6 +20,120 @@
 @endphp
 
 <div class="space-y-6">
+    @if (($openReassignmentCount ?? 0) > 0)
+        <a href="{{ route('appointment-reassignments.index') }}" class="flex items-center justify-between gap-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+            <span><strong>Provider coverage needs attention</strong><span class="block text-sm">Review pending or patient-declined doctor reassignment cases.</span></span>
+            <span class="rounded-full bg-amber-200 px-3 py-1 text-lg font-bold">{{ $openReassignmentCount }}</span>
+        </a>
+    @endif
+    @if (($pendingAppointmentApprovals ?? 0) > 0 && $user?->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']))
+        <a href="{{ route('appointments.approvals') }}" class="flex items-center justify-between gap-4 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sky-950">
+            <span><strong>Appointment requests need review</strong><span class="block text-sm">Confirm or reject online appointment requests.</span></span>
+            <span class="rounded-full bg-sky-200 px-3 py-1 text-lg font-bold">{{ $pendingAppointmentApprovals }}</span>
+        </a>
+    @endif
+    @if (($patientReassignmentCount ?? 0) > 0)
+        <a href="{{ route('patient.reassignments.index') }}" class="block rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+            <strong>You have an appointment update</strong>
+            <span class="block text-sm">Review your doctor coverage options or waitlist status.</span>
+        </a>
+    @endif
+    @if (isset($appointmentsTodayCount) || isset($pendingAppointmentApprovals) || isset($openReassignmentCount) || isset($openPrivacyRequestCount) || isset($averageTriageAgreement))
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-slate-900">Operational scorecards</h2>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                @isset($appointmentsTodayCount)
+                    <a href="{{ $isPatient ? route('patients.portal.appointments') : route('appointments.index') }}" class="panel-card p-4">
+                        <div class="text-2xl font-bold text-slate-900">{{ $appointmentsTodayCount }}</div><div class="text-sm text-slate-600">Appointments today</div>
+                    </a>
+                @endisset
+                @if (isset($pendingAppointmentApprovals) && $user?->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']))
+                    <a href="{{ route('appointments.approvals') }}" class="panel-card p-4"><div class="text-2xl font-bold text-slate-900">{{ $pendingAppointmentApprovals }}</div><div class="text-sm text-slate-600">Pending approvals</div></a>
+                @endif
+                @isset($openReassignmentCount)
+                    <a href="{{ route('appointment-reassignments.index') }}" class="panel-card p-4"><div class="text-2xl font-bold text-slate-900">{{ $openReassignmentCount }}</div><div class="text-sm text-slate-600">Open reassignment cases</div></a>
+                @endisset
+                @isset($openPrivacyRequestCount)
+                    <a href="{{ route('privacy.requests.queue') }}" class="panel-card p-4"><div class="text-2xl font-bold text-slate-900">{{ $openPrivacyRequestCount }}</div><div class="text-sm text-slate-600">Open privacy requests</div></a>
+                @endisset
+                @if (array_key_exists('averageTriageAgreement', get_defined_vars()))
+                    <a href="{{ route('reports.ai-evaluation') }}" class="panel-card p-4"><div class="text-2xl font-bold text-slate-900">{{ $averageTriageAgreement === null ? '—' : $averageTriageAgreement.'%' }}</div><div class="text-sm text-slate-600">Average triage agreement</div></a>
+                @endif
+            </div>
+        </section>
+    @endif
+    @isset($appointmentChart)
+        <section class="grid gap-4 xl:grid-cols-2">
+            <div class="panel-card p-5">
+                <h2 class="font-semibold text-slate-900">Appointments per week by status</h2>
+                <div class="mt-3 overflow-x-auto">
+                    <svg viewBox="0 0 620 190" role="img" aria-label="Weekly appointments stacked by status" class="h-48 min-w-[520px] w-full">
+                        <line x1="20" y1="150" x2="610" y2="150" stroke="#cbd5e1" />
+                        @php
+                            $statusColors = [
+                                'PENDING' => '#f59e0b', 'CONFIRMED' => '#0f766e', 'CHECKED-IN' => '#0284c7',
+                                'IN-CONSULTATION' => '#7c3aed', 'COMPLETED' => '#16a34a', 'CANCELLED' => '#dc2626',
+                                'NO-SHOW' => '#64748b', 'REJECTED' => '#9f1239',
+                            ];
+                            $chartMax = max(1, (int) $appointmentChart->map(fn ($counts) => $counts->sum())->max());
+                        @endphp
+                        @foreach ($appointmentChart as $week => $counts)
+                            @php
+                                $x = 35 + $loop->index * 70;
+                                $y = 150;
+                            @endphp
+                            @foreach ($statusColors as $status => $color)
+                                @php
+                                    $barHeight = $counts[$status] / $chartMax * 120;
+                                @endphp
+                                @if ($barHeight > 0)
+                                    @php
+                                        $y -= $barHeight;
+                                    @endphp
+                                    <rect x="{{ $x }}" y="{{ $y }}" width="34" height="{{ $barHeight }}" fill="{{ $color }}" />
+                                @endif
+                            @endforeach
+                            <text x="{{ $x + 17 }}" y="170" text-anchor="middle" font-size="9" fill="#475569">{{ substr($week, -3) }}</text>
+                        @endforeach
+                    </svg>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-3 text-xs">
+                    @foreach ($statusColors as $status => $color)<span class="inline-flex items-center gap-1"><i class="h-2.5 w-2.5 rounded-sm" style="background-color: {{ $color }}"></i>{{ $status }}</span>@endforeach
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div class="panel-card p-5">
+                    <h2 class="font-semibold text-slate-900">Triage urgency distribution</h2>
+                    <div class="mt-3 space-y-2">
+                        @php
+                            $maxUrgencyCount = max(1, max($triageUrgencyChart));
+                        @endphp
+                        @foreach ($triageUrgencyChart as $level => $count)
+                            <div class="grid grid-cols-[6rem_1fr_2rem] items-center gap-2 text-sm">
+                                <span>{{ $level }}</span><div class="h-4 overflow-hidden rounded bg-slate-100"><div class="h-full bg-amber-500" style="width: {{ $count / $maxUrgencyCount * 100 }}%"></div></div><span class="text-right">{{ $count }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="panel-card p-5">
+                    <h2 class="font-semibold text-slate-900">Virtual vs in-person appointments</h2>
+                    @php
+                        $maxConsultationCount = max(1, (int) $consultationTypeChart->max());
+                    @endphp
+                    <div class="mt-3 space-y-2">
+                        @foreach (['Virtual', 'In-person'] as $kind)
+                            @php
+                                $count = (int) $consultationTypeChart->get($kind, 0);
+                            @endphp
+                            <div class="grid grid-cols-[6rem_1fr_2rem] items-center gap-2 text-sm">
+                                <span>{{ $kind }}</span><div class="h-4 overflow-hidden rounded bg-slate-100"><div class="h-full bg-sky-600" style="width: {{ $count / $maxConsultationCount * 100 }}%"></div></div><span class="text-right">{{ $count }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </section>
+    @endisset
     @if ($isNurse || $isDoctor || $isAdmin)
         <div data-emergency-alerts class="sr-only" aria-live="assertive"></div>
     @endif
@@ -81,7 +195,7 @@
         </div>
     @endif
 
-    @if (in_array($userRole, ['super-admin']))
+    @if ($userRole === 'super-admin')
         <section class="panel-card p-6 lg:p-8">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

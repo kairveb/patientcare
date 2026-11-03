@@ -1,14 +1,17 @@
 <?php
 
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\AppointmentReassignmentController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\ArrivalCheckInController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BillingStatementController;
+use App\Http\Controllers\CareRequestController;
 use App\Http\Controllers\BedSetupController;
 use App\Http\Controllers\ChargeRateController;
 use App\Http\Controllers\Api\V1\ClinicalDocumentApiController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DoctorDirectoryController;
 use App\Http\Controllers\DischargeSummaryController;
 use App\Http\Controllers\DoctorQueueController;
 use App\Http\Controllers\EmergencyController;
@@ -18,10 +21,15 @@ use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OpdVitalsController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientConsentController;
+use App\Http\Controllers\PrivacyAcceptanceController;
+use App\Http\Controllers\PrivacyController;
+use App\Http\Controllers\PrivacyPortalController;
 use App\Http\Controllers\PatientPortalController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicQueueDisplayController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\AiEvaluationController;
 use App\Http\Controllers\SymptomCheckerController;
 use App\Http\Controllers\TelehealthController;
 use App\Http\Controllers\TelehealthIntakeController;
@@ -30,11 +38,14 @@ use App\Http\Controllers\TriageAssessmentController;
 use App\Http\Controllers\TriageReassessmentController;
 use App\Http\Middleware\TrackInactivity;
 use App\Http\Middleware\EnsureActiveUser;
+use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('landing');
 });
+Route::get('/privacy', [PrivacyController::class, 'notice'])->name('privacy.notice');
+Route::get('/terms', [PrivacyController::class, 'terms'])->name('privacy.terms');
 
 Route::get('/queue/display', [PublicQueueDisplayController::class, 'show'])
     ->name('queue.display');
@@ -42,7 +53,9 @@ Route::get('/queue/display/data', [PublicQueueDisplayController::class, 'data'])
     ->middleware('throttle:30,1')
     ->name('queue.display.data');
 
-Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function () {
+Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPrivacyAcceptance::class])->group(function () {
+    Route::get('/privacy/acceptance', [PrivacyAcceptanceController::class, 'show'])->name('privacy.acceptance');
+    Route::post('/privacy/acceptance', [PrivacyAcceptanceController::class, 'store'])->name('privacy.acceptance.store');
     Route::post('/heartbeat', function () {
         return response()->noContent();
     })->name('heartbeat')->middleware(TrackInactivity::class);
@@ -53,6 +66,22 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::get('patient-portal', [PatientPortalController::class, 'dashboard'])->name('patients.portal');
         Route::get('patient-portal/patient-id', [PatientPortalController::class, 'patientId'])->name('patients.portal.patient-id');
         Route::get('patient-portal/appointments', [PatientPortalController::class, 'appointments'])->name('patients.portal.appointments');
+        Route::get('patient-portal/privacy', [PrivacyPortalController::class, 'index'])->name('patients.portal.privacy');
+        Route::post('patient-portal/privacy/requests', [PrivacyPortalController::class, 'storeRequest'])
+            ->middleware('throttle:10,1')->name('patients.portal.privacy.requests.store');
+        Route::get('patient-portal/privacy/requests/{dataSubjectRequest}', [PrivacyPortalController::class, 'showRequest'])->name('privacy.requests.show');
+        Route::get('patient-portal/privacy/export.json', [PrivacyPortalController::class, 'jsonCopy'])->middleware('throttle:5,1')->name('patients.portal.privacy.export.json');
+        Route::get('patient-portal/privacy/export/print', [PrivacyPortalController::class, 'printableCopy'])->middleware('throttle:5,1')->name('patients.portal.privacy.export.print');
+        Route::get('doctors', [DoctorDirectoryController::class, 'index'])->name('doctors.index');
+        Route::get('doctors/{provider}', [DoctorDirectoryController::class, 'show'])
+            ->whereNumber('provider')
+            ->name('doctors.show');
+        Route::get('doctors/{provider}/calendar', [DoctorDirectoryController::class, 'calendar'])
+            ->middleware('throttle:60,1')->name('doctors.calendar');
+        Route::post('doctor-waitlist', [DoctorDirectoryController::class, 'joinWaitlist'])
+            ->middleware('throttle:10,1')->name('doctors.waitlist');
+        Route::get('patient-portal/approvals', [PatientPortalController::class, 'approvals'])->middleware('can:view-care-requests')->name('patients.portal.approvals');
+        Route::get('patient-portal/approvals/{careRequest}', [PatientPortalController::class, 'approval'])->middleware('can:view-care-requests')->name('patients.portal.approval');
         Route::get('patient-portal/history', [PatientPortalController::class, 'history'])->name('patients.portal.history');
         Route::get('patient-portal/discharge-summaries', [PatientPortalController::class, 'dischargeSummaries'])->name('patients.portal.discharge-summaries');
         Route::get('patient-portal/telehealth', [PatientPortalController::class, 'telehealth'])->name('patients.portal.telehealth');
@@ -62,6 +91,37 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::get('patient-portal/telehealth/{session}/emergency-instructions', [TelehealthIntakeController::class, 'emergencyInstructions'])->name('patients.portal.telehealth.emergency');
         Route::get('patient-portal/consents', [PatientConsentController::class, 'portalIndex'])->name('patient-consents.portal');
         Route::post('patient-portal/consents', [PatientConsentController::class, 'portalStore'])->name('patient-consents.portal.store');
+    });
+
+    Route::middleware('role:registration,admin,super-admin')->group(function () {
+        Route::get('privacy-requests', [PrivacyPortalController::class, 'queue'])->name('privacy.requests.queue');
+        Route::get('privacy-requests/{dataSubjectRequest}', [PrivacyPortalController::class, 'showRequest'])->name('privacy.requests.staff.show');
+        Route::post('privacy-requests/{dataSubjectRequest}/review', [PrivacyPortalController::class, 'review'])
+            ->middleware('throttle:20,1')->name('privacy.requests.review');
+    });
+
+    Route::middleware('role:patient')->group(function () {
+        Route::get('patient-portal/reassignments', [AppointmentReassignmentController::class, 'patientIndex'])->name('patient.reassignments.index');
+        Route::get('patient-portal/reassignments/{reassignment}', [AppointmentReassignmentController::class, 'patientShow'])->name('patient.reassignments.show');
+        Route::post('patient-portal/reassignments/{reassignment}/respond', [AppointmentReassignmentController::class, 'patientRespond'])
+            ->middleware('throttle:20,1')
+            ->name('patient.reassignments.respond');
+    });
+
+    Route::middleware('role:doctor,nurse,registration,admin,super-admin')->group(function () {
+        Route::get('provider-unavailabilities/create', [AppointmentReassignmentController::class, 'unavailabilityForm'])
+            ->name('provider-unavailabilities.create');
+        Route::post('provider-unavailabilities', [AppointmentReassignmentController::class, 'storeUnavailability'])
+            ->middleware('throttle:20,1')
+            ->name('provider-unavailabilities.store');
+    });
+
+    Route::middleware('role:registration,admin,super-admin')->group(function () {
+        Route::get('appointment-reassignments', [AppointmentReassignmentController::class, 'index'])
+            ->name('appointment-reassignments.index');
+        Route::post('appointment-reassignments/{reassignment}/decide', [AppointmentReassignmentController::class, 'decide'])
+            ->middleware('throttle:30,1')
+            ->name('appointment-reassignments.decide');
     });
 
     Route::middleware(['role:patient'])->group(function () {
@@ -105,17 +165,33 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         ->name('patients.merge');
 
     // Appointments
-    Route::middleware(['can:create-appointments', 'role:registration,super-admin,patient'])->group(function () {
+    Route::middleware(['role:admin,registration,nurse,super-admin,patient'])->group(function () {
         Route::get('appointments/create', [AppointmentController::class, 'create'])->name('appointments.create');
         Route::post('appointments', [AppointmentController::class, 'store'])->name('appointments.store');
     });
+    Route::middleware(['can:view-appointments', 'role:registration,nurse,admin,super-admin'])->group(function () {
+        Route::get('appointments/approvals', [AppointmentController::class, 'approvalQueue'])->name('appointments.approvals');
+        Route::post('appointments/{appointment}/decision', [AppointmentController::class, 'decide'])->name('appointments.decide');
+    });
+    Route::middleware(['role:registration,nurse,admin,super-admin'])->group(function () {
+        Route::get('provider-profiles', [DoctorDirectoryController::class, 'profileIndex'])->name('providers.profiles');
+        Route::get('providers/{provider}/profile/edit', [DoctorDirectoryController::class, 'editProfile'])->name('providers.profile.edit');
+        Route::put('providers/{provider}/profile', [DoctorDirectoryController::class, 'updateProfile'])->name('providers.profile.update');
+    });
+    Route::post('encounters/{encounter}/follow-up', [EncounterController::class, 'requestFollowUp'])
+        ->middleware(['role:doctor', 'throttle:20,1'])->name('encounters.follow-up');
     Route::middleware('role:patient,registration,super-admin')->group(function () {
         Route::get('symptom-checker', [SymptomCheckerController::class, 'create'])->name('symptom-checker.create');
-        Route::post('symptom-checker', [SymptomCheckerController::class, 'store'])->name('symptom-checker.store');
+        Route::post('symptom-checker', [SymptomCheckerController::class, 'store'])
+            ->middleware('throttle:symptom-triage')
+            ->name('symptom-checker.store');
+        Route::post('symptom-checker/follow-up', [SymptomCheckerController::class, 'followUp'])
+            ->middleware('throttle:symptom-triage')
+            ->name('symptom-checker.follow-up');
         Route::get('symptom-checker/{symptomCheck}/er', [SymptomCheckerController::class, 'emergency'])->name('symptom-checker.emergency');
         Route::get('symptom-checker/{symptomCheck}', [SymptomCheckerController::class, 'show'])->name('symptom-checker.show');
     });
-    Route::middleware(['can:create-appointments', 'role:registration,super-admin'])->group(function () {
+    Route::middleware(['can:create-appointments', 'role:admin,registration,super-admin'])->group(function () {
         Route::post('appointments/{appointment}/check-in', [AppointmentController::class, 'checkIn'])
             ->middleware('throttle:patient-reference-workflow')
             ->name('appointments.check-in');
@@ -146,6 +222,24 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::get('encounters', [EncounterController::class, 'index'])->name('encounters.index');
         Route::get('encounters/{encounter}', [EncounterController::class, 'show'])->name('encounters.show');
     });
+    Route::post('encounters/{encounter}/care-requests', [CareRequestController::class, 'store'])
+        ->middleware(['can:create-care-requests', 'role:doctor', 'throttle:20,1'])
+        ->name('encounters.care-requests.store');
+    Route::middleware(['can:view-care-requests', 'role:doctor,nurse,registration,super-admin,patient'])->group(function () {
+        Route::get('care-requests', [CareRequestController::class, 'index'])->name('care-requests.index');
+        Route::get('care-requests/{careRequest}', [CareRequestController::class, 'show'])->name('care-requests.show');
+        Route::get('care-requests/{careRequest}/result-file', [CareRequestController::class, 'resultFile'])->name('care-requests.result-file');
+        Route::get('care-requests/{careRequest}/slip', [CareRequestController::class, 'slip'])->name('care-requests.slip');
+    });
+    Route::post('care-requests/{careRequest}/decision', [CareRequestController::class, 'decide'])
+        ->middleware(['can:approve-care-requests', 'role:registration,super-admin', 'throttle:30,1'])
+        ->name('care-requests.decide');
+    Route::post('care-requests/{careRequest}/cancel', [CareRequestController::class, 'cancel'])
+        ->middleware(['role:doctor', 'throttle:20,1'])
+        ->name('care-requests.cancel');
+    Route::post('care-requests/{careRequest}/result', [CareRequestController::class, 'storeResult'])
+        ->middleware(['role:doctor', 'throttle:20,1'])
+        ->name('care-requests.result.store');
     Route::post('encounters/{encounter}/complete', [EncounterController::class, 'complete'])
         ->middleware(['can:complete,encounter', 'role:doctor'])
         ->name('encounters.complete');
@@ -269,15 +363,19 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::patch('telehealth/{session}/ai-summary', [TelehealthIntakeController::class, 'update'])->name('telehealth.ai-summary.update');
         Route::post('telehealth/{session}/ai-summary/approve', [TelehealthIntakeController::class, 'approve'])->name('telehealth.ai-summary.approve');
     });
-    Route::middleware('can:join-telehealth')->group(function () {
-        Route::get('telehealth/{session}/join', [TelehealthController::class, 'join'])->name('telehealth.join');
-    });
+    Route::get('telehealth/{session}/join', [TelehealthController::class, 'join'])->name('telehealth.join');
+    Route::post('telehealth/{session}/join', [TelehealthController::class, 'connect'])
+        ->middleware('throttle:10,1')
+        ->name('telehealth.connect');
+    Route::post('telehealth/{session}/leave', [TelehealthController::class, 'leave'])
+        ->middleware('throttle:10,1')
+        ->name('telehealth.leave');
     Route::middleware('can:start-telehealth')->group(function () {
         Route::post('telehealth/{session}/create-meeting', [TelehealthController::class, 'createMeeting'])->name('telehealth.create-meeting');
     });
 
     // Reports
-    Route::middleware(['can:view-reports', 'role:super-admin'])->group(function () {
+    Route::middleware(['can:view-reports', 'role:nurse,registration,admin,super-admin'])->group(function () {
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/patients', [ReportController::class, 'patients'])->name('reports.patients');
         Route::get('reports/appointments', [ReportController::class, 'appointments'])->name('reports.appointments');
@@ -286,9 +384,23 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::get('reports/beds', [ReportController::class, 'bedOccupancy'])->name('reports.beds');
         Route::get('reports/telehealth', [ReportController::class, 'telehealth'])->name('reports.telehealth');
     });
-    Route::middleware(['can:view-reports', 'role:super-admin'])->group(function () {
+    Route::middleware(['can:view-reports', 'role:nurse,registration,admin,super-admin'])->group(function () {
         Route::get('reports/ai-triage-accuracy', [ReportController::class, 'aiTriageAccuracy'])->name('reports.ai-triage-accuracy');
-        Route::get('reports/ai-triage-accuracy/export', [ReportController::class, 'exportAiTriageAccuracy'])->name('reports.ai-triage-accuracy.export');
+        Route::get('reports/ai-triage-accuracy/export', [ReportController::class, 'exportAiTriageAccuracy'])
+            ->middleware(['report.password.confirm', 'throttle:10,1'])
+            ->name('reports.ai-triage-accuracy.export');
+    });
+    Route::middleware(['can:view-reports', 'role:doctor,nurse,registration,admin,super-admin'])->group(function () {
+        Route::get('reports/{report}/export/{format}', ReportExportController::class)
+            ->middleware(['report.password.confirm', 'throttle:10,1'])
+            ->whereIn('format', ['csv', 'pdf'])
+            ->name('reports.export');
+    });
+    Route::middleware(['can:view-reports', 'role:doctor,admin,super-admin'])->group(function () {
+        Route::get('reports/ai-evaluation', [AiEvaluationController::class, 'index'])->name('reports.ai-evaluation');
+        Route::post('reports/ai-evaluation/{symptomCheck}/review', [AiEvaluationController::class, 'review'])
+            ->middleware('throttle:20,1')
+            ->name('reports.ai-evaluation.review');
     });
 
     // Audit logs
@@ -296,7 +408,7 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified'])->group(function
         Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit.index');
     });
 
-    Route::prefix('admin')->name('admin.')->middleware(['role:super-admin'])->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware(['role:admin,super-admin'])->group(function () {
         Route::middleware('can:manage-users')->group(function () {
             Route::get('users', [AdminUserController::class, 'index'])->name('users.index');
             Route::get('users/create', [AdminUserController::class, 'create'])->name('users.create');

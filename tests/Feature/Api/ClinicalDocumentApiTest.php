@@ -50,6 +50,7 @@ class ClinicalDocumentApiTest extends TestCase
     {
         $patient = Patient::first();
         $user = User::where('email', 'patient@coor.test')->first();
+        $this->acceptRequiredPrivacyDocuments($patient, $user);
         Sanctum::actingAs($user);
 
         $response = $this->postJson("/api/v1/patients/{$patient->id}/clinical-documents", [

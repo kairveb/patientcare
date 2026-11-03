@@ -54,7 +54,7 @@
                             </button>
                         </form>
                     @endunless
-                    @if ($isCurrent)
+                    @if ($isCurrent && ! ($consentType['required'] ?? false))
                         <form method="POST" action="{{ $self ? route('patient-consents.portal.store') : route('patients.consents.store', $patient) }}">
                             @csrf
                             <input type="hidden" name="type" value="{{ $type }}">

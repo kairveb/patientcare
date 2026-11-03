@@ -102,6 +102,7 @@ class AppointmentReadScopeTest extends TestCase
         $provider = Provider::firstOrFail();
         $own = $this->createAppointment($ownPatient, $provider, 'PATIENT-OWN');
         $foreign = $this->createAppointment($otherPatient, $provider, 'PATIENT-FOREIGN');
+        $this->acceptRequiredPrivacyDocuments($ownPatient, $patientUser);
 
         Sanctum::actingAs($patientUser);
 

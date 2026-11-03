@@ -10,6 +10,8 @@ use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\TelehealthSession;
 use App\Models\TriageAssessment;
+use App\Services\AuditLogService;
+use App\Services\ReportExportService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -94,37 +96,48 @@ class ReportController extends Controller
         return view('reports.ai-triage-accuracy', $report);
     }
 
-    public function exportAiTriageAccuracy(Request $request)
+    public function exportAiTriageAccuracy(Request $request, AuditLogService $audit, ReportExportService $exports)
     {
         $report = $this->aiTriageAccuracyData($request);
+        $audit->log('EXPORT_REPORT', 'report', null, 'SUCCESS', [
+            'report' => 'ai-triage-accuracy',
+            'format' => 'csv',
+            'filters' => [
+                'start' => $report['start'],
+                'end' => $report['end'],
+                'department_id' => $request->input('department_id'),
+                'doctor_id' => $request->input('doctor_id'),
+            ],
+        ], $request->user()->id);
 
-        return response()->streamDownload(function () use ($report): void {
+        return response()->streamDownload(function () use ($report, $exports): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['AI Triage Accuracy Report']);
-            fputcsv($output, ['Start date', $report['start']]);
-            fputcsv($output, ['End date', $report['end']]);
-            fputcsv($output, ['Total triage assessments', $report['total']]);
-            fputcsv($output, ['Evaluated assessments', $report['evaluated']]);
-            fputcsv($output, ['Excluded assessments', $report['excluded']]);
-            fputcsv($output, ['Agreement count', $report['agreementCount']]);
-            fputcsv($output, ['Agreement rate (%)', $report['agreementRate'] ?? 'N/A']);
-            fputcsv($output, ['Override count', $report['overrideCount']]);
-            fputcsv($output, ['Override rate (%)', $report['overrideRate'] ?? 'N/A']);
-            fputcsv($output, []);
-            fputcsv($output, ['Confusion matrix (rows: final level; columns: AI-suggested level)']);
-            fputcsv($output, ['Final level / AI suggestion', ...$report['levels']]);
+            $write = fn (array $row) => fputcsv($output, array_map($exports->safeCsvCell(...), $row));
+            $write(['AI Triage Accuracy Report']);
+            $write(['Start date', $report['start']]);
+            $write(['End date', $report['end']]);
+            $write(['Total triage assessments', $report['total']]);
+            $write(['Evaluated assessments', $report['evaluated']]);
+            $write(['Excluded assessments', $report['excluded']]);
+            $write(['Agreement count', $report['agreementCount']]);
+            $write(['Agreement rate (%)', $report['agreementRate'] ?? 'N/A']);
+            $write(['Override count', $report['overrideCount']]);
+            $write(['Override rate (%)', $report['overrideRate'] ?? 'N/A']);
+            $write([]);
+            $write(['Confusion matrix (rows: final level; columns: AI-suggested level)']);
+            $write(['Final level / AI suggestion', ...$report['levels']]);
 
             foreach ($report['levels'] as $finalLevel) {
-                fputcsv($output, [
+                $write([
                     $finalLevel,
                     ...array_map(fn (string $aiLevel): int => $report['matrix'][$finalLevel][$aiLevel], $report['levels']),
                 ]);
             }
 
-            fputcsv($output, []);
-            fputcsv($output, ['Per-level metrics', 'AI predictions', 'Final cases', 'Correct', 'Precision (%)', 'Recall (%)']);
+            $write([]);
+            $write(['Per-level metrics', 'AI predictions', 'Final cases', 'Correct', 'Precision (%)', 'Recall (%)']);
             foreach ($report['levelMetrics'] as $level => $metrics) {
-                fputcsv($output, [
+                $write([
                     $level,
                     $metrics['aiPredictions'],
                     $metrics['finalCases'],
@@ -145,6 +158,8 @@ class ReportController extends Controller
         $dates = $request->validate([
             'start' => ['nullable', 'date_format:Y-m-d'],
             'end' => ['nullable', 'date_format:Y-m-d'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'doctor_id' => ['nullable', 'integer', 'exists:providers,id'],
         ]);
 
         $end = CarbonImmutable::parse($dates['end'] ?? today()->toDateString())->endOfDay();
@@ -154,8 +169,19 @@ class ReportController extends Controller
         }
 
         $levels = ['Emergency', 'Urgent', 'Prompt', 'Non-Urgent', 'Routine'];
-        $assessments = TriageAssessment::query()
-            ->whereBetween('triaged_at', [$start, $end])
+        $assessmentsQuery = TriageAssessment::query()
+            ->whereBetween('triaged_at', [$start, $end]);
+        if (filled($dates['department_id'] ?? null) || filled($dates['doctor_id'] ?? null)) {
+            $assessmentsQuery->whereHas('erVisit.patient.encounters.provider', function ($query) use ($dates): void {
+                if (filled($dates['department_id'] ?? null)) {
+                    $query->where('department_id', (int) $dates['department_id']);
+                }
+                if (filled($dates['doctor_id'] ?? null)) {
+                    $query->whereKey((int) $dates['doctor_id']);
+                }
+            });
+        }
+        $assessments = $assessmentsQuery
             ->get(['ai_suggested_level', 'final_level', 'is_overridden']);
         $evaluated = $assessments->filter(fn (TriageAssessment $assessment): bool =>
             in_array($assessment->ai_suggested_level, $levels, true)

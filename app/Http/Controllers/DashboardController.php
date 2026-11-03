@@ -4,16 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Admission;
 use App\Models\Appointment;
+use App\Models\AppointmentReassignment;
 use App\Models\AuditLog;
 use App\Models\Bed;
+use App\Models\CareRequest;
+use App\Models\DataSubjectRequest;
 use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\TelehealthSession;
 use Illuminate\Http\Request;
+use App\Services\AiEvaluationService;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request)
+    public function __invoke(Request $request, AiEvaluationService $evaluations)
     {
         $user = $request->user();
         $isSuperAdmin = $user->hasRole('super-admin');
@@ -22,6 +26,79 @@ class DashboardController extends Controller
         $data = [
             'currentRole' => $isSuperAdmin ? 'super-admin' : ($user->roles()->first()?->name ?? 'guest'),
         ];
+
+        if ($user->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin', 'patient'])) {
+            $todayAppointmentsQuery = Appointment::query()->whereDate('starts_at', today());
+            if ($user->hasRole('doctor')) {
+                $todayAppointmentsQuery->where('provider_id', $providerId ?? 0);
+            } elseif ($user->hasRole('patient')) {
+                $todayAppointmentsQuery->where('patient_id', $user->patient?->id ?? 0);
+            }
+            $data['appointmentsTodayCount'] = $todayAppointmentsQuery->count();
+        }
+
+        if ($user->hasAnyRole(['registration', 'admin', 'super-admin'])) {
+            $data['openPrivacyRequestCount'] = DataSubjectRequest::query()
+                ->whereIn('status', [DataSubjectRequest::STATUS_SUBMITTED, DataSubjectRequest::STATUS_IN_REVIEW])
+                ->count();
+        }
+
+        if ($user->hasAnyRole(['doctor', 'admin', 'super-admin'])) {
+            $data['averageTriageAgreement'] = $evaluations->metrics([], $user)['agreement_rate'] ?? null;
+        }
+
+        if ($user->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin'])) {
+            $since = today()->subWeeks(7)->startOfWeek();
+            $appointmentQuery = Appointment::query()
+                ->whereBetween('starts_at', [$since, now()->endOfWeek()]);
+            if ($user->hasRole('doctor')) {
+                $appointmentQuery->where('provider_id', $providerId ?? 0);
+            }
+            $weeklyRows = $appointmentQuery->get(['starts_at', 'status']);
+            $weeks = collect(range(0, 7))->map(fn (int $offset) => $since->copy()->addWeeks($offset)->format('o-\\WW'));
+            $statusNames = [
+                Appointment::STATUS_PENDING,
+                Appointment::STATUS_CONFIRMED,
+                Appointment::STATUS_CHECKED_IN,
+                Appointment::STATUS_IN_CONSULTATION,
+                Appointment::STATUS_COMPLETED,
+                Appointment::STATUS_CANCELLED,
+                Appointment::STATUS_NO_SHOW,
+                Appointment::STATUS_REJECTED,
+            ];
+            $data['appointmentChart'] = $weeks->mapWithKeys(fn (string $week) => [
+                $week => collect($statusNames)->mapWithKeys(fn (string $status) => [
+                    $status => $weeklyRows->filter(fn (Appointment $appointment): bool =>
+                        $appointment->starts_at->format('o-\\WW') === $week && $appointment->status === $status
+                    )->count(),
+                ]),
+            ]);
+            $data['triageUrgencyChart'] = $evaluations->metrics([], $user)['urgency_counts'];
+            $consultationQuery = Appointment::query()
+                ->with('appointmentType:id,telehealth')
+                ->whereBetween('starts_at', [$since, now()->endOfWeek()]);
+            if ($user->hasRole('doctor')) {
+                $consultationQuery->where('provider_id', $providerId ?? 0);
+            }
+            $data['consultationTypeChart'] = $consultationQuery->get()
+                ->groupBy(fn (Appointment $appointment): string =>
+                    $appointment->appointmentType?->telehealth ? 'Virtual' : 'In-person'
+                )->map->count();
+        }
+
+        if ($user->hasAnyRole(['registration', 'admin', 'super-admin'])) {
+            $data['openReassignmentCount'] = AppointmentReassignment::query()
+                ->whereIn('status', [
+                    AppointmentReassignment::STATUS_PENDING_REVIEW,
+                    AppointmentReassignment::STATUS_DECLINED_BY_PATIENT,
+                ])
+                ->count();
+        }
+        if ($user->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin'])) {
+            $data['pendingAppointmentApprovals'] = Appointment::query()
+                ->where('status', Appointment::STATUS_PENDING)
+                ->count();
+        }
 
         if ($isSuperAdmin) {
             $data += [
@@ -89,6 +166,16 @@ class DashboardController extends Controller
 
         if ($user->hasRole('patient')) {
             $patient = $user->patient;
+            $data['patientReassignmentCount'] = $patient
+                ? AppointmentReassignment::query()
+                    ->whereIn('status', [
+                        AppointmentReassignment::STATUS_PENDING_REVIEW,
+                        AppointmentReassignment::STATUS_DECLINED_BY_PATIENT,
+                        AppointmentReassignment::STATUS_WAITLISTED,
+                    ])
+                    ->whereHas('appointment', fn ($query) => $query->where('patient_id', $patient->id))
+                    ->count()
+                : 0;
             $data['myAppointments'] = $patient
                 ? Appointment::with('provider')->where('patient_id', $patient->id)->orderBy('starts_at', 'desc')->limit(10)->get()
                 : collect();

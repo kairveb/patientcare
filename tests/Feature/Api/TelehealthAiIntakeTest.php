@@ -26,6 +26,7 @@ class TelehealthAiIntakeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -186,6 +187,7 @@ class TelehealthAiIntakeTest extends TestCase
         $patientUser = $this->userWithRole('patient');
         $doctor = $this->userWithRole('doctor');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         app(PatientConsentService::class)->record($patient, 'AI_ASSISTED', true, $patientUser, 'self');
         $provider = Provider::create([
             'user_id' => $doctor->id,
@@ -226,6 +228,7 @@ class TelehealthAiIntakeTest extends TestCase
     private function userWithRole(string $roleName): User
     {
         $user = User::factory()->create(['email' => $roleName.'-'.Str::uuid().'@example.test']);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->attach(Role::where('name', $roleName)->firstOrFail());
 
         return $user;

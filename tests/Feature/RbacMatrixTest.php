@@ -14,6 +14,12 @@ class RbacMatrixTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['security.otp_enabled' => false]);
+    }
+
     public function test_each_role_has_expected_access_scope(): void
     {
         $this->seed(HimsSeeder::class);
@@ -23,6 +29,7 @@ class RbacMatrixTest extends TestCase
         $doctor = User::whereHas('roles', fn ($query) => $query->where('name', 'doctor'))->firstOrFail();
         $nurse = User::whereHas('roles', fn ($query) => $query->where('name', 'nurse'))->firstOrFail();
         $patient = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
+        $this->acceptSeededPatientConsent($patient);
 
         $this->actingAs($superAdmin, 'web')->get('/patients/lookup')->assertOk();
         $this->actingAs($superAdmin, 'web')->get('/audit-logs')->assertOk();
@@ -42,11 +49,13 @@ class RbacMatrixTest extends TestCase
 
         $this->actingAs($nurse, 'web')->get('/emergency')->assertOk();
         $this->actingAs($nurse, 'web')->get('/triage')->assertOk();
-        $this->actingAs($nurse, 'web')->get('/reports')->assertForbidden();
+        $this->actingAs($nurse, 'web')->get('/reports')->assertOk();
+        $this->actingAs($nurse, 'web')->get('/reports/ai-evaluation')->assertForbidden();
         $this->actingAs($nurse, 'web')->get('/audit-logs')->assertForbidden();
         $this->actingAs($nurse, 'web')->get('/patients/lookup')->assertForbidden();
 
         $this->actingAs($doctor, 'web')->get('/reports')->assertForbidden();
+        $this->actingAs($doctor, 'web')->get('/reports/ai-evaluation')->assertOk();
         $this->actingAs($doctor, 'web')->get('/audit-logs')->assertForbidden();
         $this->actingAs($doctor, 'web')->get('/triage')->assertOk();
 
@@ -54,7 +63,8 @@ class RbacMatrixTest extends TestCase
         $this->actingAs($superAdmin, 'web')->get('/audit-logs')->assertOk();
         $this->actingAs($superAdmin, 'web')->get('/triage')->assertOk();
 
-        $this->actingAs($registration, 'web')->get('/reports')->assertForbidden();
+        $this->actingAs($registration, 'web')->get('/reports')->assertOk();
+        $this->actingAs($registration, 'web')->get('/reports/ai-evaluation')->assertForbidden();
         $this->actingAs($registration, 'web')->get('/audit-logs')->assertForbidden();
         $this->actingAs($registration, 'web')->get('/triage')->assertForbidden();
 
@@ -125,6 +135,9 @@ class RbacMatrixTest extends TestCase
 
         foreach ($roles as $roleName => $expectations) {
             $user = User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            if ($roleName === 'patient') {
+                $this->acceptSeededPatientConsent($user);
+            }
             $response = $this->actingAs($user, 'web')->get('/dashboard');
             $response->assertOk();
 
@@ -304,7 +317,7 @@ class RbacMatrixTest extends TestCase
         $this->assertTrue($registration->permissions()->where('name', 'view-beds')->exists());
         $this->assertTrue($registration->permissions()->where('name', 'view-admissions')->exists());
         $this->assertTrue($registration->permissions()->where('name', 'assign-beds')->exists());
-        $this->assertFalse($registration->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($registration->permissions()->where('name', 'view-reports')->exists());
         $this->assertTrue($doctor->permissions()->where('name', 'view-triage')->exists());
         $this->assertFalse($doctor->permissions()->where('name', 'update-patients')->exists());
         $this->assertFalse($doctor->permissions()->where('name', 'update-appointments')->exists());
@@ -341,6 +354,7 @@ class RbacMatrixTest extends TestCase
         $doctor = User::whereHas('roles', fn ($query) => $query->where('name', 'doctor'))->firstOrFail();
         $nurse = User::whereHas('roles', fn ($query) => $query->where('name', 'nurse'))->firstOrFail();
         $patient = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
+        $this->acceptSeededPatientConsent($patient);
         $frontDesk = User::whereHas('roles', fn ($query) => $query->where('name', 'registration'))->firstOrFail();
 
         $doctorResponse = $this->actingAs($doctor, 'web')->get('/dashboard');
@@ -378,6 +392,9 @@ class RbacMatrixTest extends TestCase
 
         foreach ($roles as $roleName => $expectations) {
             $user = User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            if ($roleName === 'patient') {
+                $this->acceptSeededPatientConsent($user);
+            }
             $response = $this->actingAs($user, 'web')->get('/dashboard');
 
             $response->assertOk();
@@ -387,6 +404,7 @@ class RbacMatrixTest extends TestCase
                 foreach ($expectations['items'] as $item) {
                     $response->assertSee($item);
                 }
+
             } else {
                 $response->assertDontSee('Inpatient');
                 foreach ($expectations['items'] as $item) {
@@ -489,5 +507,11 @@ class RbacMatrixTest extends TestCase
         $nurseResponse->assertOk();
         $nurseResponse->assertSee('Chest pain');
         $nurseResponse->assertSee('Back pain');
+    }
+
+    private function acceptSeededPatientConsent(User $user): void
+    {
+        $patient = Patient::query()->where('user_id', $user->id)->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patient, $user);
     }
 }

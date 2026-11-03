@@ -15,7 +15,7 @@ class QueueDisplayService
             Appointment::STATUS_CHECKED_IN => QueueDisplayEntry::STATUS_WAITING,
             Appointment::STATUS_IN_CONSULTATION => QueueDisplayEntry::STATUS_IN_SERVICE,
             Appointment::STATUS_COMPLETED => QueueDisplayEntry::STATUS_COMPLETED,
-            Appointment::STATUS_CANCELLED, Appointment::STATUS_NO_SHOW => QueueDisplayEntry::STATUS_CANCELLED,
+            Appointment::STATUS_CANCELLED, Appointment::STATUS_REJECTED, Appointment::STATUS_NO_SHOW => QueueDisplayEntry::STATUS_CANCELLED,
             default => null,
         };
 

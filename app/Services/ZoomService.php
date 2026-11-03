@@ -88,12 +88,14 @@ class ZoomService
             return null;
         }
 
+        $passcode = strtoupper(bin2hex(random_bytes(5)));
         try {
             $response = Http::withToken($token)->post('https://api.zoom.us/v2/users/me/meetings', [
                 'topic' => $data['topic'] ?? 'Telehealth Consultation',
                 'type' => 2,
                 'start_time' => $data['start_time'] ?? now()->toIso8601String(),
                 'duration' => $data['duration'] ?? 30,
+                'password' => $passcode,
                 'timezone' => 'Asia/Manila',
                 'settings' => [
                     'host_video' => true,
@@ -101,6 +103,7 @@ class ZoomService
                     'join_before_host' => false,
                     'mute_upon_entry' => true,
                     'waiting_room' => true,
+                    'auto_recording' => 'none',
                 ],
             ]);
         } catch (ConnectionException) {
@@ -122,6 +125,7 @@ class ZoomService
                 'meeting_id' => (string) $meetingId,
                 'join_url' => $joinUrl,
                 'start_url' => $startUrl,
+                'password' => $passcode,
             ];
         }
 

@@ -23,6 +23,12 @@ class EmergencyAndTelehealthUiTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['security.otp_enabled' => false]);
+    }
+
     public function test_emergency_index_page_shows_triage_dashboard_sections(): void
     {
         $user = User::factory()->create([
@@ -729,6 +735,7 @@ class EmergencyAndTelehealthUiTest extends TestCase
         $patientUser = User::factory()->create([
             'email_verified_at' => now(),
         ]);
+        $patientUser->forceFill(['email_verified_at' => now()])->save();
         $patientRole = Role::firstOrCreate(['name' => 'patient'], ['label' => 'Patient']);
         $patientUser->roles()->syncWithoutDetaching([$patientRole->id]);
 
@@ -743,6 +750,7 @@ class EmergencyAndTelehealthUiTest extends TestCase
             'email' => 'portal-patient@example.test',
             'verified' => true,
         ]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         $provider = Provider::create([
             'user_id' => User::factory()->create()->id,
             'display_name' => 'Dr. Portal',

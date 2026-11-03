@@ -58,12 +58,27 @@ class AppointmentService
         }
 
         return DB::transaction(function () use ($data, $userId) {
-            $startsAt = Carbon::parse($data['starts_at']);
-            $duration = $data['duration'] ?? 30;
-            $endsAt = $startsAt->copy()->addMinutes($duration);
+            if (empty($data['appointment_slot_id'])) {
+                throw ValidationException::withMessages([
+                    'appointment_slot_id' => 'Select an available appointment slot.',
+                ]);
+            }
 
-            $this->ensureNoConflict($data['provider_id'], $startsAt, $endsAt);
-            $this->claimOptionalSlot($data['appointment_slot_id'] ?? null);
+            $providerId = (int) $data['provider_id'];
+            $this->scheduling->lockProvider($providerId);
+
+            $startsAt = Carbon::parse($data['starts_at']);
+            $duration = isset($data['duration']) ? (int) $data['duration'] : null;
+            $slot = $this->scheduling->reserveSlot(
+                (int) $data['appointment_slot_id'],
+                $providerId,
+                $startsAt,
+                $duration
+            );
+            $startsAt = $slot->starts_at;
+            $endsAt = $slot->ends_at;
+
+            $this->ensureNoConflict($providerId, $startsAt, $endsAt);
 
             $appointment = $this->createAppointmentRecord($data, $startsAt, $endsAt, $userId);
             $this->recordInitialStatusHistory($appointment, $userId);
@@ -74,25 +89,11 @@ class AppointmentService
         });
     }
 
-    protected function ensureNoConflict(int $providerId, Carbon $startsAt, Carbon $endsAt): void
+    protected function ensureNoConflict(int $providerId, Carbon $startsAt, Carbon $endsAt, ?int $ignoreAppointmentId = null): void
     {
-        if ($this->scheduling->providerHasConflict($providerId, $startsAt, $endsAt)) {
+        if ($this->scheduling->providerHasConflict($providerId, $startsAt, $endsAt, $ignoreAppointmentId)) {
             throw ValidationException::withMessages([
                 'starts_at' => 'This provider already has an appointment that conflicts with the selected time.',
-            ]);
-        }
-    }
-
-    protected function claimOptionalSlot(?int $slotId): void
-    {
-        if (!$slotId) {
-            return;
-        }
-
-        $claimed = $this->scheduling->claimSlot($slotId);
-        if (!$claimed) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'This time slot is no longer available.',
             ]);
         }
     }
@@ -110,6 +111,8 @@ class AppointmentService
             'status' => $data['status'] ?? Appointment::STATUS_PENDING,
             'reason' => $data['reason'] ?? null,
             'created_by' => $userId,
+            'booking_source' => $data['booking_source'] ?? 'online',
+            'parent_appointment_id' => $data['parent_appointment_id'] ?? null,
         ]);
     }
 
@@ -136,37 +139,40 @@ class AppointmentService
      */
     public function transitionStatus(Appointment $appointment, string $toStatus, ?int $userId = null, ?string $reason = null): Appointment
     {
-        $allowed = $this->allowedTransitions($appointment->status);
-
-        if (!in_array($toStatus, $allowed)) {
-            throw ValidationException::withMessages([
-                'status' => "Cannot transition appointment from {$appointment->status} to {$toStatus}.",
-            ]);
-        }
-
         return DB::transaction(function () use ($appointment, $toStatus, $userId, $reason) {
-            $from = $appointment->status;
-            $appointment->update(['status' => $toStatus]);
-
-            if ($toStatus === Appointment::STATUS_CONFIRMED && $appointment->appointmentType?->telehealth) {
-                $this->telehealth->createSession($appointment);
+            $lockedAppointment = Appointment::query()->whereKey($appointment->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($toStatus, $this->allowedTransitions($lockedAppointment->status), true)) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot transition appointment from {$lockedAppointment->status} to {$toStatus}.",
+                ]);
             }
 
-            if ($toStatus === Appointment::STATUS_CANCELLED && $appointment->telehealthSession) {
-                $this->telehealth->cancel($appointment->telehealthSession);
+            $from = $lockedAppointment->status;
+            $lockedAppointment->update(['status' => $toStatus]);
+
+            if ($toStatus === Appointment::STATUS_CONFIRMED && $lockedAppointment->appointmentType?->telehealth) {
+                $this->telehealth->createSession($lockedAppointment);
+            }
+
+            if (in_array($toStatus, [Appointment::STATUS_CANCELLED, Appointment::STATUS_REJECTED], true) && $lockedAppointment->telehealthSession) {
+                $this->telehealth->cancel($lockedAppointment->telehealthSession);
             }
 
             AppointmentStatusHistory::create([
-                'appointment_id' => $appointment->id,
+                'appointment_id' => $lockedAppointment->id,
                 'from_status' => $from,
                 'to_status' => $toStatus,
                 'changed_by' => $userId,
                 'reason' => $reason,
             ]);
 
-            $this->queueDisplay->syncAppointment($appointment);
+            $this->queueDisplay->syncAppointment($lockedAppointment);
 
-            return $appointment;
+            if (in_array($toStatus, [Appointment::STATUS_CANCELLED, Appointment::STATUS_REJECTED, Appointment::STATUS_NO_SHOW], true)) {
+                $this->releaseSlot($lockedAppointment);
+            }
+
+            return $lockedAppointment->fresh();
         });
     }
 
@@ -182,9 +188,23 @@ class AppointmentService
 
     public function cancel(Appointment $appointment, ?int $userId = null, ?string $reason = null): Appointment
     {
-        $this->releaseSlot($appointment);
-        $this->audit->cancelAppointment($appointment->id, ['reason' => $reason]);
-        return $this->transitionStatus($appointment, Appointment::STATUS_CANCELLED, $userId, $reason ?? 'Cancelled');
+        return DB::transaction(function () use ($appointment, $userId, $reason): Appointment {
+            $this->scheduling->lockProvider((int) $appointment->provider_id);
+            $lockedAppointment = Appointment::query()
+                ->whereKey($appointment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $cancelledAppointment = $this->transitionStatus(
+                $lockedAppointment,
+                Appointment::STATUS_CANCELLED,
+                $userId,
+                $reason ?? 'Cancelled'
+            );
+
+            $this->audit->cancelAppointment($cancelledAppointment->id, ['reason' => $reason]);
+
+            return $cancelledAppointment;
+        });
     }
 
     public function markNoShow(Appointment $appointment, ?int $userId = null): Appointment
@@ -197,19 +217,39 @@ class AppointmentService
      */
     public function reschedule(Appointment $appointment, array $data, ?int $userId = null): Appointment
     {
-        $startsAt = Carbon::parse($data['starts_at']);
-        $duration = isset($data['duration']) ? (int) $data['duration'] : 30;
-        $endsAt = $startsAt->copy()->addMinutes($duration);
+        return DB::transaction(function () use ($appointment, $data, $userId) {
+            if (empty($data['appointment_slot_id'])) {
+                throw ValidationException::withMessages([
+                    'appointment_slot_id' => 'Select an available appointment slot.',
+                ]);
+            }
 
-        if ($this->scheduling->providerHasConflict($appointment->provider_id, $startsAt, $endsAt, $appointment->id)) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'This provider already has an appointment that conflicts with the selected time.',
-            ]);
-        }
+            $this->scheduling->lockProvider((int) $appointment->provider_id);
+            $lockedAppointment = Appointment::query()
+                ->whereKey($appointment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $startsAt = Carbon::parse($data['starts_at']);
+            $duration = isset($data['duration']) ? (int) $data['duration'] : null;
+            $slot = $this->scheduling->reserveSlot(
+                (int) $data['appointment_slot_id'],
+                (int) $lockedAppointment->provider_id,
+                $startsAt,
+                $duration
+            );
+            $startsAt = $slot->starts_at;
+            $endsAt = $slot->ends_at;
 
-        return DB::transaction(function () use ($appointment, $startsAt, $endsAt, $userId) {
-            $this->releaseSlot($appointment);
-            $appointment->update([
+            $this->ensureNoConflict(
+                (int) $lockedAppointment->provider_id,
+                $startsAt,
+                $endsAt,
+                (int) $lockedAppointment->id
+            );
+
+            $previousStatus = $lockedAppointment->status;
+            $this->releaseSlot($lockedAppointment);
+            $lockedAppointment->update([
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
                 'status' => Appointment::STATUS_CONFIRMED,
@@ -218,16 +258,91 @@ class AppointmentService
             ]);
 
             AppointmentStatusHistory::create([
-                'appointment_id' => $appointment->id,
-                'from_status' => 'RESCHEDULED',
+                'appointment_id' => $lockedAppointment->id,
+                'from_status' => $previousStatus,
                 'to_status' => Appointment::STATUS_CONFIRMED,
                 'changed_by' => $userId,
                 'reason' => 'Rescheduled',
             ]);
 
-            $this->audit->rescheduleAppointment($appointment->id);
+            $this->audit->rescheduleAppointment($lockedAppointment->id);
 
-            return $appointment;
+            return $lockedAppointment;
+        });
+    }
+
+    public function reassignProvider(
+        Appointment $appointment,
+        int $providerId,
+        int $slotId,
+        Carbon $startsAt,
+        ?int $userId = null,
+        ?string $reason = null
+    ): Appointment {
+        return DB::transaction(function () use ($appointment, $providerId, $slotId, $startsAt, $userId, $reason): Appointment {
+            $providerIds = [(int) $appointment->provider_id, $providerId];
+            sort($providerIds);
+            foreach (array_unique($providerIds) as $id) {
+                $this->scheduling->lockProvider($id);
+            }
+            if (! \App\Models\Provider::query()->whereKey($providerId)->where('active', true)->exists()) {
+                throw ValidationException::withMessages([
+                    'provider_id' => 'The selected replacement doctor is not active.',
+                ]);
+            }
+
+            $lockedAppointment = Appointment::query()->whereKey($appointment->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($lockedAppointment->status, [Appointment::STATUS_PENDING, Appointment::STATUS_CONFIRMED], true)) {
+                throw ValidationException::withMessages([
+                    'appointment' => 'Only pending or confirmed appointments can be reassigned.',
+                ]);
+            }
+
+            $slot = $this->scheduling->reserveSlot($slotId, $providerId, $startsAt);
+            $this->ensureNoConflict($providerId, $slot->starts_at, $slot->ends_at, (int) $lockedAppointment->id);
+
+            $fromStatus = $lockedAppointment->status;
+            $oldProviderId = (int) $lockedAppointment->provider_id;
+            $providerDepartmentId = \App\Models\Provider::query()->findOrFail($providerId)->department_id;
+            $this->releaseSlot($lockedAppointment);
+            $lockedAppointment->update([
+                'provider_id' => $providerId,
+                'department_id' => $providerDepartmentId ?? $lockedAppointment->department_id,
+                'starts_at' => $slot->starts_at,
+                'ends_at' => $slot->ends_at,
+                'status' => Appointment::STATUS_CONFIRMED,
+                'reminder_24h_sent_at' => null,
+                'reminder_1h_sent_at' => null,
+            ]);
+
+            AppointmentStatusHistory::create([
+                'appointment_id' => $lockedAppointment->id,
+                'from_status' => $fromStatus,
+                'to_status' => Appointment::STATUS_CONFIRMED,
+                'changed_by' => $userId,
+                'reason' => $reason ?? 'Provider reassigned due to unavailability',
+            ]);
+
+            $session = $lockedAppointment->telehealthSession()->lockForUpdate()->first();
+            if ($session) {
+                $session->update([
+                    'start_time' => $slot->starts_at,
+                    'duration' => (int) $slot->starts_at->diffInMinutes($slot->ends_at),
+                    'status' => \App\Models\TelehealthSession::STATUS_SCHEDULED,
+                ]);
+                if (str_contains((string) $session->join_url, '/telehealth/')) {
+                    $joinUrl = url('/telehealth/'.$session->id.'/join?token='.rawurlencode($session->fresh()->secureJoinToken()));
+                    $session->update(['join_url' => $joinUrl, 'host_start_url' => $joinUrl]);
+                }
+            }
+
+            $this->audit->log('REASSIGN_APPOINTMENT_PROVIDER', 'appointment', $lockedAppointment->id, 'SUCCESS', [
+                'original_provider_id' => $oldProviderId,
+                'new_provider_id' => $providerId,
+                'appointment_slot_id' => $slot->id,
+            ], $userId);
+
+            return $lockedAppointment->fresh(['provider', 'telehealthSession']);
         });
     }
 
@@ -236,10 +351,27 @@ class AppointmentService
      */
     protected function releaseSlot(Appointment $appointment): void
     {
+        $startsAt = Carbon::parse($appointment->starts_at);
+        $endsAt = Carbon::parse($appointment->ends_at);
+        $status = $this->scheduling->providerIsUnavailable((int) $appointment->provider_id, $startsAt, $endsAt)
+            ? AppointmentSlot::STATUS_BLOCKED
+            : AppointmentSlot::STATUS_AVAILABLE;
+
         AppointmentSlot::where('provider_id', $appointment->provider_id)
             ->where('starts_at', $appointment->starts_at)
             ->where('status', AppointmentSlot::STATUS_BOOKED)
-            ->update(['status' => AppointmentSlot::STATUS_AVAILABLE]);
+            ->update(['status' => $status]);
+
+        if ($status === AppointmentSlot::STATUS_AVAILABLE) {
+            $slot = AppointmentSlot::query()
+                ->where('provider_id', $appointment->provider_id)
+                ->where('starts_at', $appointment->starts_at)
+                ->where('status', AppointmentSlot::STATUS_AVAILABLE)
+                ->first();
+            if ($slot) {
+                app(AppointmentWaitlistService::class)->offerMatchingPatients($slot);
+            }
+        }
     }
 
     /**
@@ -253,12 +385,13 @@ class AppointmentService
     protected function allowedTransitions(string $from): array
     {
         return match ($from) {
-            Appointment::STATUS_PENDING => [Appointment::STATUS_CONFIRMED, Appointment::STATUS_CANCELLED],
+            Appointment::STATUS_PENDING => [Appointment::STATUS_CONFIRMED, Appointment::STATUS_REJECTED, Appointment::STATUS_CANCELLED],
             Appointment::STATUS_CONFIRMED => [Appointment::STATUS_CHECKED_IN, Appointment::STATUS_CANCELLED, Appointment::STATUS_NO_SHOW],
             Appointment::STATUS_CHECKED_IN => [Appointment::STATUS_IN_CONSULTATION, Appointment::STATUS_CANCELLED],
             Appointment::STATUS_IN_CONSULTATION => [Appointment::STATUS_COMPLETED],
             Appointment::STATUS_COMPLETED => [],
             Appointment::STATUS_CANCELLED => [],
+            Appointment::STATUS_REJECTED => [],
             Appointment::STATUS_NO_SHOW => [],
             default => [],
         };

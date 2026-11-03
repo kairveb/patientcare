@@ -15,6 +15,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(HimsSeeder::class);
+        $this->call([
+            ReferenceDataSeeder::class,
+            RbacReconciliationSeeder::class,
+            AdminRoleSeeder::class,
+            CareRequestRbacSeeder::class,
+        ]);
+
+        if (! app()->environment('production')) {
+            $this->call(DemoDataSeeder::class);
+        }
     }
 }

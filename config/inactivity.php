@@ -14,5 +14,5 @@ return [
 
     'enabled' => env('INACTIVITY_ENABLED', true),
 
-    'timeout' => (int) env('INACTIVITY_TIMEOUT', 180),
+    'timeout' => max(1, (int) env('SESSION_IDLE_MINUTES', 5)) * 60,
 ];

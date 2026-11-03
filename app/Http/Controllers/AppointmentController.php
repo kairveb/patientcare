@@ -9,7 +9,11 @@ use App\Models\Patient;
 use App\Models\Provider;
 use App\Models\SymptomCheck;
 use App\Policies\AppointmentPolicy;
+use App\Http\Requests\RescheduleAppointmentRequest;
+use App\Http\Requests\DecideAppointmentRequest;
 use App\Services\AppointmentService;
+use App\Services\AuditLogService;
+use App\Notifications\AppointmentJourneyNotification;
 use App\Services\PatientService;
 use App\Services\SchedulingService;
 use Illuminate\Http\Request;
@@ -22,7 +26,8 @@ class AppointmentController extends Controller
         protected AppointmentService $appointments,
         protected SchedulingService $scheduling,
         protected PatientService $patients,
-        protected AppointmentPolicy $appointmentPolicy
+        protected AppointmentPolicy $appointmentPolicy,
+        protected AuditLogService $audit
     ) {}
 
     public function index(Request $request)
@@ -82,6 +87,7 @@ class AppointmentController extends Controller
                 Appointment::STATUS_IN_CONSULTATION,
                 Appointment::STATUS_COMPLETED,
                 Appointment::STATUS_CANCELLED,
+                Appointment::STATUS_REJECTED,
                 Appointment::STATUS_NO_SHOW,
             ],
         ]);
@@ -98,12 +104,54 @@ class AppointmentController extends Controller
         $departments = Department::orderBy('name')->get();
         $appointmentTypes = AppointmentType::orderBy('name')->get();
         $selectedAppointmentTypeId = null;
+        $selectedDepartmentId = null;
+        $selectedProviderId = null;
+        $selectedSpecialtyName = null;
+        $selectedReason = null;
+        $selectedSlotId = null;
+        $selectedStartsAt = null;
+        $parentAppointmentId = null;
+        $selectedBookingSource = $user->isPatient() ? 'online' : 'online';
+        if ($request->filled('provider_id')) {
+            $selectedProviderId = $request->integer('provider_id');
+        }
+        if ($request->filled('appointment_type_id')) {
+            $selectedAppointmentTypeId = $request->integer('appointment_type_id');
+        }
+        if ($request->filled('appointment_slot_id')) {
+            $slot = \App\Models\AppointmentSlot::query()
+                ->whereKey($request->integer('appointment_slot_id'))
+                ->where('status', \App\Models\AppointmentSlot::STATUS_AVAILABLE)
+                ->first();
+            if ($slot && (! $selectedProviderId || (int) $selectedProviderId === (int) $slot->provider_id)) {
+                $selectedProviderId = $slot->provider_id;
+                $selectedSlotId = $slot->id;
+                $selectedStartsAt = $slot->starts_at;
+            }
+        }
+        $selectedReason = $request->query('reason');
+        $parentAppointmentId = $request->integer('parent_appointment_id') ?: null;
         if ($request->filled('symptom_check_id')) {
             $symptomCheck = SymptomCheck::query()->findOrFail($request->integer('symptom_check_id'));
             if ($user->hasRole('patient') && $user->patient?->id !== $symptomCheck->patient_id) {
                 abort(403);
             }
             abort_if($symptomCheck->requires_er, 403);
+            $triageResult = $symptomCheck->ai_result ?? [];
+            $selectedDepartmentId = $triageResult['recommended_department_id']
+                ?? $departments->firstWhere('name', $symptomCheck->recommended_department)?->id;
+            $selectedSpecialtyName = $triageResult['recommended_specialty'] ?? null;
+            $specialtyId = $triageResult['recommended_specialty_id'] ?? null;
+            if ($selectedDepartmentId && $specialtyId) {
+                $selectedProviderId = Provider::query()
+                    ->where('active', true)
+                    ->where('department_id', $selectedDepartmentId)
+                    ->whereHas('specialties', fn ($query) => $query->whereKey($specialtyId))
+                    ->orderBy('id')
+                    ->value('id');
+            }
+            $selectedReason = implode(', ', $symptomCheck->symptoms ?? []);
+
             $selectedAppointmentTypeId = AppointmentType::query()
                 ->where('active', true)
                 ->where('telehealth', $symptomCheck->recommended_consult_type === 'Virtual')
@@ -113,7 +161,21 @@ class AppointmentController extends Controller
             }
         }
 
-        return view('appointments.create', compact('patients', 'providers', 'departments', 'appointmentTypes', 'selectedAppointmentTypeId'));
+        return view('appointments.create', compact(
+            'patients',
+            'providers',
+            'departments',
+            'appointmentTypes',
+            'selectedAppointmentTypeId',
+            'selectedDepartmentId',
+            'selectedProviderId',
+            'selectedSpecialtyName',
+            'selectedReason',
+            'selectedSlotId',
+            'selectedStartsAt',
+            'parentAppointmentId',
+            'selectedBookingSource'
+        ));
     }
 
     public function store(Request $request)
@@ -128,13 +190,66 @@ class AppointmentController extends Controller
                 'starts_at' => ['required', 'date'],
                 'duration' => ['nullable', 'integer', 'min:5', 'max:240'],
                 'reason' => ['nullable', 'string'],
+                'appointment_slot_id' => ['required', 'integer', 'exists:appointment_slots,id'],
+                'booking_source' => ['nullable', 'in:online,walk_in,phone'],
+                'parent_appointment_id' => ['nullable', 'integer', 'exists:appointments,id'],
             ]);
 
             if ($request->user()->isPatient()) {
                 $data['patient_id'] = $request->user()->patient()->firstOrFail()->id;
+                $data['booking_source'] = 'online';
+                $data['status'] = config('appointments.requires_approval', true)
+                    ? Appointment::STATUS_PENDING
+                    : Appointment::STATUS_CONFIRMED;
+            } else {
+                $data['booking_source'] = $data['booking_source'] ?? 'online';
+                if (in_array($data['booking_source'], ['walk_in', 'phone'], true)) {
+                    abort_unless($request->user()->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']), 403);
+                    $data['status'] = Appointment::STATUS_CONFIRMED;
+                } elseif (! config('appointments.requires_approval', true)) {
+                    $data['status'] = Appointment::STATUS_CONFIRMED;
+                }
+
+            }
+
+            if (! empty($data['parent_appointment_id'])) {
+                $parent = Appointment::query()->findOrFail($data['parent_appointment_id']);
+                abort_unless(
+                    (int) $parent->patient_id === (int) $data['patient_id']
+                    && (int) $parent->provider_id === (int) $data['provider_id'],
+                    403,
+                    'A follow-up must be booked with the same doctor for the same patient.'
+                );
+            }
+            if (! empty($data['appointment_type_id'])) {
+                $type = AppointmentType::query()->findOrFail($data['appointment_type_id']);
+                $provider = Provider::query()->findOrFail($data['provider_id']);
+                if ($type->telehealth && ! $provider->accepts_virtual) {
+                    throw ValidationException::withMessages([
+                        'appointment_type_id' => 'This doctor is not currently accepting virtual consultations.',
+                    ]);
+                }
+                $slot = \App\Models\AppointmentSlot::query()->findOrFail($data['appointment_slot_id']);
+                if ($slot->appointment_type_id && (int) $slot->appointment_type_id !== (int) $type->id) {
+                    throw ValidationException::withMessages([
+                        'appointment_slot_id' => 'The selected slot is not for this consultation type.',
+                    ]);
+                }
             }
 
             $appointment = $this->appointments->book($data, auth()->id());
+            if (in_array($appointment->booking_source, ['walk_in', 'phone'], true)) {
+                $this->audit->log('CREATE_WALK_IN_APPOINTMENT', 'appointment', $appointment->id, 'SUCCESS', [
+                    'booking_source' => $appointment->booking_source,
+                ], $request->user()->id);
+            }
+            if ($appointment->status === Appointment::STATUS_CONFIRMED && $appointment->patient?->user) {
+                $appointment->patient->user->notify(new AppointmentJourneyNotification(
+                    'Appointment confirmed',
+                    'Your appointment is confirmed for '.$appointment->starts_at->format('M j, Y g:i A').'.',
+                    $appointment
+                ));
+            }
             $appointment->load(['patient', 'provider', 'department', 'appointmentType', 'statusHistories.user', 'encounter', 'telehealthSession']);
 
             if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
@@ -159,6 +274,41 @@ class AppointmentController extends Controller
 
             return back()->withInput()->withErrors($e->errors());
         }
+    }
+
+    public function approvalQueue(Request $request)
+    {
+        abort_unless($request->user()->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']), 403);
+        $appointments = Appointment::query()->with(['patient', 'provider', 'appointmentType'])
+            ->where('status', Appointment::STATUS_PENDING)
+            ->orderBy('starts_at')
+            ->paginate(20);
+
+        return view('appointments.approvals', compact('appointments'));
+    }
+
+    public function decide(DecideAppointmentRequest $request, Appointment $appointment)
+    {
+        $data = $request->validated();
+        $status = $data['decision'] === 'confirm'
+            ? Appointment::STATUS_CONFIRMED
+            : Appointment::STATUS_REJECTED;
+        $updated = $this->appointments->transitionStatus($appointment, $status, $request->user()->id, $data['reason']);
+        $this->audit->log($data['decision'] === 'confirm' ? 'APPROVE_APPOINTMENT' : 'REJECT_APPOINTMENT',
+            'appointment', $updated->id, 'SUCCESS', ['has_reason' => true], $request->user()->id);
+
+        $patientUser = $updated->patient?->user;
+        if ($patientUser) {
+            $patientUser->notify(new AppointmentJourneyNotification(
+                $data['decision'] === 'confirm' ? 'Appointment confirmed' : 'Appointment request not approved',
+                $data['decision'] === 'confirm'
+                    ? 'Your appointment request has been confirmed for '.$updated->starts_at->format('M j, Y g:i A').'.'
+                    : 'Your appointment request was not approved. Reason: '.$data['reason'],
+                $updated
+            ));
+        }
+
+        return back()->with('success', $data['decision'] === 'confirm' ? 'Appointment confirmed.' : 'Appointment rejected.');
     }
 
     public function show(Request $request, Appointment $appointment)
@@ -250,13 +400,10 @@ class AppointmentController extends Controller
         }
     }
 
-    public function reschedule(Request $request, Appointment $appointment)
+    public function reschedule(RescheduleAppointmentRequest $request, Appointment $appointment)
     {
         Gate::authorize('reschedule', $appointment);
-        $data = $request->validate([
-            'starts_at' => ['required', 'date'],
-            'duration' => ['nullable', 'integer'],
-        ]);
+        $data = $request->validated();
 
         try {
             $this->appointments->reschedule($appointment, $data, auth()->id());

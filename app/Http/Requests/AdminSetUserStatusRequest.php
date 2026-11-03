@@ -8,8 +8,12 @@ class AdminSetUserStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('super-admin') === true
-            && $this->user()->hasPermission('manage-users');
+        $actor = $this->user();
+        $target = $this->route('user');
+
+        return $actor?->hasAnyRole(['admin', 'super-admin']) === true
+            && $actor->hasPermission('manage-users')
+            && ($actor->hasRole('super-admin') || ! $target?->hasRole('super-admin'));
     }
 
     public function rules(): array

@@ -19,7 +19,7 @@ class ArrivalCheckInTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -157,6 +157,7 @@ class ArrivalCheckInTest extends TestCase
     public function test_patient_cannot_use_the_shared_staff_reference_lookup(): void
     {
         $patientUser = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patientUser->patient, $patientUser);
 
         $this->actingAs($patientUser)
             ->get(route('emergency.checkin.lookup', ['reference_code' => 'PRC-1234567890123456']))
@@ -199,7 +200,7 @@ class ArrivalCheckInTest extends TestCase
         $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->syncWithoutDetaching([$role->id]);
 
-        Patient::create([
+        $patient = Patient::create([
             'user_id' => $user->id,
             'mrn' => 'MRN-CHECKIN-002',
             'first_name' => 'Access',
@@ -210,6 +211,7 @@ class ArrivalCheckInTest extends TestCase
             'email' => 'access.patient@example.test',
             'verified' => true,
         ]);
+        $this->acceptRequiredPrivacyDocuments($patient, $user);
 
         $this->actingAs($user, 'web')->get('/emergency/check-in/' . (string) Str::uuid())
             ->assertForbidden();

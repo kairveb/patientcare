@@ -21,6 +21,10 @@
   </head>
   <body class="login-page" data-module="@yield('module', 'auth')" data-page="@yield('page', 'login')">
     @yield('content')
+    <footer class="mx-auto flex justify-center gap-5 px-4 py-5 text-sm text-slate-700">
+      <a class="underline" href="{{ route('privacy.notice') }}">Privacy Notice</a>
+      <a class="underline" href="{{ route('privacy.terms') }}">Terms and Agreement</a>
+    </footer>
     @stack('scripts')
   </body>
 </html>

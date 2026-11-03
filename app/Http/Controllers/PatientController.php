@@ -294,6 +294,9 @@ class PatientController extends Controller
     public function showVitals(Patient $patient)
     {
         $this->authorize('view', $patient);
+        if (auth()->user()->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin'])) {
+            $this->audit->viewPatientClinicalData((int) $patient->id, 'vitals', (int) $patient->id);
+        }
         $vitals = $patient->vitals()->with('encounter')->orderBy('recorded_at', 'desc')->paginate(20);
         return view('patients.partials.vitals', compact('patient', 'vitals'));
     }

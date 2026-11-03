@@ -9,6 +9,8 @@
         <a href="{{ route('reports.index') }}" class="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50">Back</a>
     </div>
 
+    @include('reports._export-links', ['report' => 'beds'])
+
     <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
         @foreach (['AVAILABLE'=>'green','OCCUPIED'=>'red','RESERVED'=>'amber','CLEANING'=>'blue','MAINTENANCE'=>'slate','BLOCKED'=>'slate'] as $key=>$color)
             <div class="p-5 bg-white rounded-xl border border-slate-200">
@@ -26,7 +28,7 @@
                 <tbody>
                     @forelse ($admissions as $adm)
                         <tr class="border-b border-slate-100">
-                            <td class="py-3 px-4 font-medium">{{ $adm->patient->full_name ?? '—' }}</td>
+                            <td class="py-3 px-4 font-medium">{{ $adm->patient->reference_code ?? 'Reference unavailable' }}</td>
                             <td class="py-3 px-4 font-mono text-xs">{{ $adm->admission_number }}</td>
                             <td class="py-3 px-4">{{ $adm->admitted_at?->format('M d, Y g:i A') }}</td>
                         </tr>

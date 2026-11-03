@@ -20,6 +20,7 @@ class PrescriptionEncounterLinkTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -129,6 +130,7 @@ class PrescriptionEncounterLinkTest extends TestCase
             $patientUser->roles()->attach(\App\Models\Role::where('name', 'patient')->value('id'));
             $encounter->patient->update(['user_id' => $patientUser->id]);
         }
+        $this->acceptRequiredPrivacyDocuments($encounter->patient, $patientUser);
 
         $this->actingAs($patientUser)->get('/patient-portal')
             ->assertOk()

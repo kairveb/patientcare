@@ -1,232 +1,145 @@
 @extends('layouts.hims')
 
-@section('title', 'Join Telehealth Consultation')
+@section('title', 'Private Telehealth Consultation')
 
 @section('content')
-<div class="space-y-6">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+<main class="mx-auto max-w-6xl space-y-5 px-1 sm:px-2">
+    @if ($demoMode)
+        <div role="alert" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950">
+            Demo video mode: not suitable for real patient consultations.
+        </div>
+    @endif
+
+    <header class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Virtual consultation</p>
-            <h1 class="mt-2 text-2xl font-bold text-slate-900">Telehealth room</h1>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Private virtual consultation</p>
+            <h1 class="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">Telehealth consultation</h1>
+            <p class="mt-2 text-sm text-slate-600">Appointment time: {{ $session->appointment->starts_at->format('M j, Y g:i A') }} (Philippine time)</p>
         </div>
+        <span class="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+            <span class="h-2 w-2 rounded-full bg-teal-600"></span>
+            {{ $role === 'doctor' ? 'Assigned doctor' : 'Your appointment' }}
+        </span>
+    </header>
 
-        <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                Live session
-            </span>
-            <span class="text-sm text-slate-500">{{ $session->start_time?->format('M d, Y g:i A') }}</span>
-        </div>
-    </div>
-
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.75fr)_390px]">
-        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div>
-                    <p class="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Room</p>
-                    <h2 class="mt-1 text-base font-semibold text-slate-800">{{ $session->appointment->appointment_number ?? 'Consultation' }}</h2>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <button type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300">Mute</button>
-                    <button type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300">Camera</button>
-                </div>
-            </div>
-
-            <div class="relative h-[520px] bg-slate-950">
-                <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(20,184,166,0.22),_transparent_60%),linear-gradient(135deg,#0f172a_0%,#111827_100%)]"></div>
-
-                <div class="absolute left-5 top-5 z-10 flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 backdrop-blur-sm">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-teal-500/20 text-sm font-semibold text-teal-200">
-                        {{ strtoupper(substr($session->appointment->patient->full_name ?? 'P', 0, 1)) }}
-                    </div>
-                    <div>
-                        <p class="text-sm font-medium text-white">{{ $session->appointment->patient->full_name ?? 'Patient' }}</p>
-                        <p class="text-[11px] text-slate-300">Visible to provider</p>
-                    </div>
-                </div>
-
-                <div class="absolute bottom-5 right-5 z-10 flex w-56 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/70 p-3 text-sm text-slate-100 backdrop-blur-sm">
-                    <div class="flex items-center justify-between">
-                        <span class="text-slate-300">Provider</span>
-                        <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300">
-                            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-                            Online
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-200">
-                            {{ strtoupper(substr($session->appointment->provider->full_name ?? 'D', 0, 1)) }}
-                        </div>
-                        <div>
-                            <p class="font-medium text-white">{{ $session->appointment->provider->full_name ?? 'Doctor' }}</p>
-                            <p class="text-[11px] text-slate-400">{{ $session->appointment->provider->specialty->name ?? 'Clinician' }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="absolute bottom-5 left-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-200 backdrop-blur-sm">
-                    <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
-                    {{ $session->status }}
-                </div>
-            </div>
-
-            <div class="border-t border-slate-200 bg-slate-50 px-4 py-3">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" class="status-toggle rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700" data-status="Ready">Ready</button>
-                    <button type="button" class="status-toggle rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700" data-status="In session">In session</button>
-                    <button type="button" class="status-toggle rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700" data-status="Break">Break</button>
-                    <button type="button" class="status-toggle rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700" data-status="Wrap-up">Wrap-up</button>
-                </div>
-            </div>
+    @if (! $joined)
+        <section class="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950 sm:p-6">
+            <h2 class="font-bold">Privacy before you join</h2>
+            <ul class="mt-2 list-inside list-disc space-y-1">
+                <li>Your consultation is confidential. Join from a private place where others cannot overhear.</li>
+                <li>Recording is not allowed unless both the patient and doctor consent.</li>
+                <li>This platform does not store the video.</li>
+            </ul>
         </section>
 
-        <aside class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div class="flex items-center gap-2">
-                    <button type="button" class="drawer-tab active rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm" data-tab="notes">Notes</button>
-                    <button type="button" class="drawer-tab rounded-lg bg-transparent px-2.5 py-1.5 text-xs font-medium text-slate-500" data-tab="chat">Chat</button>
-                    <button type="button" class="drawer-tab rounded-lg bg-transparent px-2.5 py-1.5 text-xs font-medium text-slate-500" data-tab="summary">Summary</button>
-                </div>
-                <button type="button" class="drawer-toggle rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">Collapse</button>
-            </div>
-
-            <div class="drawer-panel space-y-4 p-4" data-panel="notes">
-                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div class="mb-2 flex items-center justify-between text-xs font-medium text-slate-600">
-                        <span>Visit snapshot</span>
-                        <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Updated</span>
+        <section class="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Before connecting</h2>
+                <ul class="mt-3 space-y-2 text-sm text-slate-700">
+                    <li>✓ Check that your camera is available.</li>
+                    <li>✓ Check that your microphone is available.</li>
+                    <li>✓ Use a stable, private internet connection.</li>
+                    <li>✓ Use headphones if other people are nearby.</li>
+                </ul>
+                @if ($errors->any())
+                    <div role="alert" class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        @foreach ($errors->all() as $error)<p>{{ $error }}</p>@endforeach
                     </div>
-                    <dl class="grid grid-cols-2 gap-2 text-xs text-slate-600">
-                        <div>
-                            <dt class="text-slate-400">Reason</dt>
-                            <dd class="mt-1 font-medium text-slate-700">Follow-up review</dd>
-                        </div>
-                        <div>
-                            <dt class="text-slate-400">Pain</dt>
-                            <dd class="mt-1 font-medium text-slate-700">3/10</dd>
-                        </div>
-                        <div>
-                            <dt class="text-slate-400">BP</dt>
-                            <dd class="mt-1 font-medium text-slate-700">118/76</dd>
-                        </div>
-                        <div>
-                            <dt class="text-slate-400">Temp</dt>
-                            <dd class="mt-1 font-medium text-slate-700">36.8°C</dd>
-                        </div>
-                    </dl>
-                </div>
-
-                <label class="block text-sm font-medium text-slate-700" for="clinical-note">Clinical note</label>
-                <textarea id="clinical-note" rows="10" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 shadow-inner outline-none transition focus:border-teal-400 focus:bg-white" placeholder="Document assessment, observations, and plan...">Patient reports improved mobility and reduced discomfort. No new red flags. Continue home exercise plan and monitor hydration levels.</textarea>
-
-                <div class="flex items-center justify-between gap-3">
-                    <button type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300">Save draft</button>
-                    <button type="button" class="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">Finalize note</button>
-                </div>
+                @endif
+                <form method="POST" action="{{ route('telehealth.connect', $session) }}" class="mt-5 border-t border-slate-200 pt-4">
+                    @csrf
+                    <input type="hidden" name="join_token" value="{{ $joinToken }}">
+                    <label class="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-700">
+                        <input type="checkbox" name="privacy_acknowledged" value="1" required class="mt-1 rounded border-slate-300 text-teal-700 focus:ring-teal-600">
+                        <span>I have read and acknowledge this privacy notice for this consultation.</span>
+                    </label>
+                    <button type="submit" class="mt-4 w-full rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 sm:w-auto">
+                        Acknowledge and join
+                    </button>
+                </form>
             </div>
-
-            <div class="drawer-panel hidden space-y-3 p-4" data-panel="chat">
-                <div class="space-y-3">
-                    <div class="max-w-[80%] rounded-2xl rounded-bl-md bg-slate-100 px-3 py-2 text-sm text-slate-700">
-                        Good morning. I’m feeling much better since the last review.
-                    </div>
-                    <div class="ml-auto max-w-[80%] rounded-2xl rounded-br-md bg-teal-600 px-3 py-2 text-sm text-white">
-                        Excellent. Let’s keep the same plan and recheck in one week.
-                    </div>
-                    <div class="max-w-[80%] rounded-2xl rounded-bl-md bg-slate-100 px-3 py-2 text-sm text-slate-700">
-                        Thank you. I’ll continue the exercises and hydration plan.
-                    </div>
+            <aside class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Confidentiality checklist</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Only the patient on this appointment and the currently assigned doctor may join. Current telehealth consent is checked again when you connect.</p>
+                <p class="mt-4 text-xs leading-5 text-slate-500">If you are in a shared area, move somewhere private before continuing. For technical help, contact the hospital.</p>
+            </aside>
+        </section>
+    @else
+        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            @if ($videoDetails['provider'] === 'jitsi_demo')
+                <div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    Demo connection only. Do not discuss real patient information in this demo room.
                 </div>
-
-                <div class="mt-auto flex items-center gap-2 pt-2">
-                    <input type="text" value="" placeholder="Type a message..." class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-teal-400 focus:bg-white">
-                    <button type="button" class="rounded-xl bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-700">Send</button>
+                <div id="jitsi-demo-frame" class="min-h-[55vh] bg-slate-950 sm:min-h-[70vh]" aria-label="Demo video room"></div>
+            @else
+                <div class="space-y-4 p-4 sm:p-6">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <h2 class="font-semibold text-slate-900">Your private Zoom consultation is ready</h2>
+                        <p class="mt-1 text-sm text-slate-600">Zoom waiting room is enabled. The doctor must admit you.</p>
+                        @if ($videoDetails['passcode'])
+                            <p class="mt-3 text-sm text-slate-700">Meeting passcode: <strong class="select-all font-mono">{{ $videoDetails['passcode'] }}</strong></p>
+                        @endif
+                    </div>
+                    <a href="{{ $videoDetails['join_url'] }}" target="_blank" rel="noopener noreferrer" class="inline-flex w-full items-center justify-center rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-800 sm:w-auto">
+                        Join consultation in Zoom
+                    </a>
                 </div>
-            </div>
-
-            <div class="drawer-panel hidden space-y-4 p-4" data-panel="summary">
-                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Summary</p>
-                    <ul class="mt-3 space-y-2 text-sm text-slate-700">
-                        <li class="flex items-start gap-2"><span class="mt-1 h-1.5 w-1.5 rounded-full bg-teal-500"></span> Patient reports improved symptoms and stable vitals.</li>
-                        <li class="flex items-start gap-2"><span class="mt-1 h-1.5 w-1.5 rounded-full bg-teal-500"></span> Continue follow-up care plan and mild activity progression.</li>
-                        <li class="flex items-start gap-2"><span class="mt-1 h-1.5 w-1.5 rounded-full bg-teal-500"></span> Schedule next review in 7 days.</li>
-                    </ul>
-                </div>
-            </div>
-        </aside>
-    </div>
-
-    <div class="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center">
-        <div class="flex items-center gap-3 text-sm text-slate-600">
-            <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                Secure session
-            </span>
-            <span>{{ $session->appointment->patient->full_name ?? 'Patient' }} · {{ $session->appointment->provider->full_name ?? 'Provider' }}</span>
-        </div>
-
-        <div class="flex items-center gap-2">
-            @if ($canViewJoinUrl && $session->join_url)
-                <a href="{{ $session->join_url }}" target="_blank" rel="noopener noreferrer" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300">
-                    Open external room
-                </a>
             @endif
-            <button type="button" class="rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700">End consult</button>
+        </section>
+        <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <p class="text-sm text-slate-600">Keep this page open so your private session heartbeat continues.</p>
+            <form method="POST" action="{{ route('telehealth.leave', $session) }}">
+                @csrf
+                @if ($role === 'doctor')
+                    <input type="hidden" name="end_session" value="1">
+                    <button class="w-full rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 sm:w-auto">End consultation</button>
+                @else
+                    <button class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto">Leave consultation</button>
+                @endif
+            </form>
         </div>
-    </div>
-</div>
+    @endif
+</main>
+@endsection
 
 @push('scripts')
+@if ($joined && $videoDetails['provider'] === 'jitsi_demo')
+<script src="https://meet.jit.si/external_api.js"></script>
 <script>
-    (function () {
-        const tabs = document.querySelectorAll('.drawer-tab');
-        const panels = document.querySelectorAll('.drawer-panel');
-        const statusButtons = document.querySelectorAll('.status-toggle');
-        const drawerToggle = document.querySelector('.drawer-toggle');
-        const drawerPanelRoot = document.querySelector('aside');
-
-        function setActiveTab(tabName) {
-            tabs.forEach((tab) => {
-                const isActive = tab.dataset.tab === tabName;
-                tab.classList.toggle('active', isActive);
-                tab.classList.toggle('bg-white', isActive);
-                tab.classList.toggle('shadow-sm', isActive);
-                tab.classList.toggle('text-slate-700', isActive);
-                tab.classList.toggle('text-slate-500', !isActive);
-                tab.classList.toggle('bg-transparent', !isActive);
-            });
-
-            panels.forEach((panel) => {
-                const visible = panel.dataset.panel === tabName;
-                panel.classList.toggle('hidden', !visible);
-            });
-        }
-
-        tabs.forEach((tab) => {
-            tab.addEventListener('click', () => setActiveTab(tab.dataset.tab));
+    (() => {
+        const container = document.getElementById('jitsi-demo-frame');
+        if (!container || typeof window.JitsiMeetExternalAPI !== 'function') return;
+        new window.JitsiMeetExternalAPI('meet.jit.si', {
+            roomName: @json($videoDetails['room_name']),
+            parentNode: container,
+            width: '100%',
+            height: Math.max(420, Math.min(window.innerHeight * 0.7, 760)),
+            userInfo: { displayName: @json($role === 'doctor' ? 'Assigned doctor (demo)' : 'Patient (demo)') },
+            configOverwrite: { prejoinPageEnabled: false, disableDeepLinking: true },
+            interfaceConfigOverwrite: { TOOLBAR_BUTTONS: ['microphone', 'camera', 'hangup', 'chat', 'settings'] }
         });
-
-        statusButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                statusButtons.forEach((item) => {
-                    item.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
-                    item.classList.add('bg-white', 'text-slate-700', 'border-slate-200');
-                });
-
-                button.classList.remove('bg-white', 'text-slate-700', 'border-slate-200');
-                button.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
-            });
-        });
-
-        if (drawerToggle && drawerPanelRoot) {
-            drawerToggle.addEventListener('click', () => {
-                drawerPanelRoot.classList.toggle('hidden');
-                drawerToggle.textContent = drawerPanelRoot.classList.contains('hidden') ? 'Expand' : 'Collapse';
-            });
-        }
     })();
 </script>
+@endif
+@if ($joined)
+<script>
+    (() => {
+        const heartbeatUrl = @json(route('session.heartbeat'));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const sendHeartbeat = () => fetch(heartbeatUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        }).then((response) => {
+            if (!response.ok) window.location.assign(@json(route('login')) + '?timeout=1');
+        }).catch((error) => console.error('Telehealth session heartbeat failed.', error));
+        sendHeartbeat();
+        window.setInterval(sendHeartbeat, 45000);
+    })();
+</script>
+@endif
 @endpush
-@endsection

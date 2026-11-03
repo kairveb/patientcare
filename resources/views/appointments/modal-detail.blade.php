@@ -85,16 +85,14 @@
     @role('registration', 'super-admin')
         <div class="rounded-xl border border-slate-200 bg-white p-6">
             <h3 class="mb-3 font-semibold text-slate-800">Reschedule Appointment</h3>
-            <form class="appointment-action-form flex flex-wrap items-end gap-3" data-appointment-action="reschedule" method="POST" action="{{ route('appointments.reschedule', $appointment) }}" onsubmit="return false;">
+            <form class="appointment-action-form flex flex-wrap items-end gap-3" data-appointment-action="reschedule" method="POST" action="{{ route('appointments.reschedule', $appointment) }}" onsubmit="return false;" data-appointment-slot-picker data-provider-id="{{ $appointment->provider_id }}" data-slots-url="{{ route('appointments.slots') }}">
                 @csrf
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-700">New Date &amp; Time</label>
-                    <input type="datetime-local" name="starts_at" required class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <label class="mb-1 block text-sm font-medium text-slate-700">New Date</label>
+                    <input type="date" data-slot-date required class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 </div>
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-700">Duration (min)</label>
-                    <input type="number" name="duration" value="30" class="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                </div>
+                <div data-slot-results class="w-full text-sm text-slate-600" aria-live="polite"></div>
+                <input type="hidden" name="starts_at" value="">
                 <button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900">Reschedule</button>
             </form>
         </div>

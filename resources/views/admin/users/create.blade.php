@@ -7,7 +7,7 @@
     <div>
         <a href="{{ route('admin.users.index') }}" class="text-sm font-medium text-teal-700 hover:underline">&larr; User Management</a>
         <h1 class="mt-2 text-2xl font-bold text-slate-800">Create user account</h1>
-        <p class="mt-1 text-sm text-slate-500">Select exactly one of the five supported system roles.</p>
+        <p class="mt-1 text-sm text-slate-500">Select a system role. Nurse and registration records remain separate for access control and display as Staff.</p>
     </div>
 
     @if ($errors->any())
@@ -26,6 +26,10 @@
             <div>
                 <label for="email" class="mb-1 block text-sm font-medium text-slate-700">Email</label>
                 <input id="email" name="email" type="email" value="{{ old('email') }}" required maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+            </div>
+            <div>
+                <label for="username" class="mb-1 block text-sm font-medium text-slate-700">Username <span class="font-normal text-slate-500">(optional; defaults from email)</span></label>
+                <input id="username" name="username" value="{{ old('username') }}" maxlength="190" autocomplete="username" class="w-full rounded-lg border border-slate-300 px-3 py-2">
             </div>
             <div>
                 <label for="role" class="mb-1 block text-sm font-medium text-slate-700">Role</label>

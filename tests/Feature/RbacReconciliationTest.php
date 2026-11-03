@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Admission;
 use App\Models\Appointment;
+use App\Models\AppointmentSlot;
 use App\Models\AppointmentType;
 use App\Models\EncounterBill;
 use App\Models\Patient;
@@ -54,7 +55,16 @@ class RbacReconciliationTest extends TestCase
         $ownPatient = $patientUser->patient()->firstOrFail();
         $otherPatient = Patient::whereNull('user_id')->firstOrFail();
         $provider = Provider::query()->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($ownPatient, $patientUser);
         $appointmentType = AppointmentType::query()->firstOrFail();
+        $bookingStartsAt = now()->addDays(3)->setTime(9, 0);
+        $bookingSlot = AppointmentSlot::create([
+            'provider_id' => $provider->id,
+            'appointment_type_id' => $appointmentType->id,
+            'starts_at' => $bookingStartsAt,
+            'ends_at' => $bookingStartsAt->copy()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_AVAILABLE,
+        ]);
         $token = $patientUser->createToken('patient-appointments')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -72,7 +82,8 @@ class RbacReconciliationTest extends TestCase
                 'provider_id' => $provider->id,
                 'department_id' => $provider->department_id,
                 'appointment_type_id' => $appointmentType->id,
-                'starts_at' => now()->addDays(3)->setTime(9, 0)->toDateTimeString(),
+                'starts_at' => $bookingStartsAt->toDateTimeString(),
+                'appointment_slot_id' => $bookingSlot->id,
                 'duration' => 30,
             ])
             ->assertCreated()
@@ -94,9 +105,17 @@ class RbacReconciliationTest extends TestCase
             ->assertJsonFragment(['id' => $ownAppointment->id])
             ->assertJsonMissing(['id' => $foreignAppointment->id]);
 
+        $rescheduleStartsAt = now()->addDays(4)->setTime(10, 0);
+        $rescheduleSlot = AppointmentSlot::create([
+            'provider_id' => $provider->id,
+            'starts_at' => $rescheduleStartsAt,
+            'ends_at' => $rescheduleStartsAt->copy()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_AVAILABLE,
+        ]);
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson("/api/v1/appointments/{$ownAppointment->id}/reschedule", [
-                'starts_at' => now()->addDays(4)->setTime(10, 0)->toDateTimeString(),
+                'starts_at' => $rescheduleStartsAt->toDateTimeString(),
+                'appointment_slot_id' => $rescheduleSlot->id,
             ])->assertOk();
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson("/api/v1/appointments/{$ownAppointment->id}/cancel")
@@ -207,10 +226,11 @@ class RbacReconciliationTest extends TestCase
         $this->assertFalse($nurse->permissions()->where('name', 'manage-beds')->exists());
         $this->assertFalse($nurse->permissions()->where('name', 'view-billing')->exists());
         $this->assertTrue($nurse->permissions()->where('name', 'update-bed-status')->exists());
+        $this->assertTrue($nurse->permissions()->where('name', 'view-reports')->exists());
 
         $doctor = \App\Models\Role::where('name', 'doctor')->firstOrFail();
         $this->assertFalse($doctor->permissions()->where('name', 'view-billing')->exists());
-        $this->assertFalse($doctor->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($doctor->permissions()->where('name', 'view-reports')->exists());
         $this->assertTrue($doctor->permissions()->where('name', 'view-payment-status')->exists());
 
         $patient = \App\Models\Role::where('name', 'patient')->firstOrFail();

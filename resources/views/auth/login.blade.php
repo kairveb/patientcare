@@ -31,12 +31,22 @@
                     <p class="login-help">Sign in to continue your access to trusted healthcare services and patient-centered support.</p>
                 </header>
 
+                @if (request()->boolean('timeout'))
+                    <div role="status" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        You were signed out after {{ config('security.session_idle_minutes', 5) }} minutes of inactivity. Please sign in again.
+                    </div>
+                @endif
+                @if (session('status'))
+                    <div role="status" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{{ session('status') }}</div>
+                @endif
+
                 <form method="POST" action="{{ route('login') }}" id="login-form" novalidate>
                     @csrf
                     <div class="form-field">
-                        <label for="login-email">Email address</label>
-                        <input id="login-email" name="email" type="email" autocomplete="email" placeholder="name@hospital.org" required value="{{ old('email') }}">
+                        <label for="login-identifier">Username or email</label>
+                        <input id="login-identifier" name="identifier" type="text" autocomplete="username" placeholder="Username or name@hospital.org" required value="{{ old('identifier', old('email')) }}">
                         @error('email')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                        @error('identifier')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
                     <div class="form-field">
                         <label for="login-password">Password</label>

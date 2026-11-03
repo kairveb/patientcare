@@ -25,6 +25,7 @@ class PatientReferenceCodeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -118,6 +119,8 @@ class PatientReferenceCodeTest extends TestCase
             'email' => 'prc-account@example.test',
             'password' => 'Password123!Secure',
             'password_confirmation' => 'Password123!Secure',
+            'privacy_notice_accepted' => '1',
+            'terms_accepted' => '1',
         ])->assertRedirect();
 
         $registeredPatient = Patient::whereHas('user', fn ($query) => $query->where('email', 'prc-account@example.test'))
@@ -251,6 +254,7 @@ class PatientReferenceCodeTest extends TestCase
 
         $patientUser = $this->user('patient@coor.test');
         $ownPatient = $patientUser->patient()->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($ownPatient, $patientUser);
         $ownPatient->update(['reference_code' => app(PatientService::class)->generateUniqueReferenceCode()]);
 
         $this->actingAs($patientUser)

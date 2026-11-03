@@ -66,6 +66,7 @@ class DashboardApiTest extends TestCase
 
     public function test_doctor_dashboard_payload_includes_role_summary_counts(): void
     {
+        $this->travelTo(now()->startOfDay()->addHours(10));
         $this->seed(HimsSeeder::class);
 
         $user = User::where('email', 'doctor@coor.test')->firstOrFail();
@@ -257,6 +258,7 @@ class DashboardApiTest extends TestCase
             'date_of_birth' => '1990-01-01',
             'sex' => 'Female',
         ]);
+        $this->acceptRequiredPrivacyDocuments($patient, $user);
         $otherPatient = Patient::create([
             'mrn' => 'MRN-DASH-OTHER-' . $user->id,
             'first_name' => 'Other',

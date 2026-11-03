@@ -45,8 +45,11 @@
                         <li><a class="nav-link{{ request()->routeIs('dashboard') ? ' active' : '' }}" href="{{ route('dashboard') }}" aria-label="Dashboard" @if(request()->routeIs('dashboard')) aria-current="page" @endif><i class="ph-fill ph-squares-four" aria-hidden="true"></i><span class="nav-label">Dashboard</span></a></li>
                         @if (auth()->user()->hasRole('patient'))
                             @can('portal-dashboard')
-                                <li><a class="nav-link{{ request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries') ? ' active' : '' }}" href="{{ route('patients.portal') }}" aria-label="Patient Portal" @if(request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries')) aria-current="page" @endif><i class="ph-fill ph-user-circle" aria-hidden="true"></i><span class="nav-label">Patient Portal</span></a></li>
+                                <li><a class="nav-link{{ request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries', 'patients.portal.approvals', 'patients.portal.approval', 'patient.reassignments.*') ? ' active' : '' }}" href="{{ route('patients.portal') }}" aria-label="Patient Portal" @if(request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries', 'patients.portal.approvals', 'patients.portal.approval', 'patient.reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-user-circle" aria-hidden="true"></i><span class="nav-label">Patient Portal</span></a></li>
+                                <li><a class="nav-link{{ request()->routeIs('patients.portal.privacy', 'privacy.requests.show') ? ' active' : '' }}" href="{{ route('patients.portal.privacy') }}" aria-label="My Privacy"><i class="ph-fill ph-shield-check" aria-hidden="true"></i><span class="nav-label">My Privacy</span></a></li>
+                                <li><a class="nav-link{{ request()->routeIs('patient.reassignments.*') ? ' active' : '' }}" href="{{ route('patient.reassignments.index') }}" aria-label="Appointment updates" @if(request()->routeIs('patient.reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-warning" aria-hidden="true"></i><span class="nav-label">Appointment updates</span></a></li>
                                 <li><a class="nav-link{{ request()->routeIs('patients.portal.discharge-summaries') ? ' active' : '' }}" href="{{ route('patients.portal.discharge-summaries') }}" aria-label="My Discharge Summaries" @if(request()->routeIs('patients.portal.discharge-summaries')) aria-current="page" @endif><i class="ph-fill ph-file-text" aria-hidden="true"></i><span class="nav-label">Discharge summaries</span></a></li>
+                                <li><a class="nav-link{{ request()->routeIs('patients.portal.approvals', 'patients.portal.approval') ? ' active' : '' }}" href="{{ route('patients.portal.approvals') }}" aria-label="My Approvals" @if(request()->routeIs('patients.portal.approvals', 'patients.portal.approval')) aria-current="page" @endif><i class="ph-fill ph-file-check" aria-hidden="true"></i><span class="nav-label">My Approvals</span></a></li>
                             @endcan
                         @endif
                     </ul>
@@ -70,6 +73,16 @@
                     @if ($showHospitalSystemsSection)
                     <p class="nav-title">Hospital Systems</p>
                     <ul class="nav-list nav-domain-list">
+                        @if (auth()->user()->hasAnyRole(['admin','registration','super-admin']))
+                            <li><a class="nav-link{{ request()->routeIs('appointment-reassignments.*') ? ' active' : '' }}" href="{{ route('appointment-reassignments.index') }}" aria-label="Provider coverage" @if(request()->routeIs('appointment-reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Provider coverage</span></a></li>
+                        @elseif (auth()->user()->hasRole('doctor'))
+                            <li><a class="nav-link{{ request()->routeIs('provider-unavailabilities.*') ? ' active' : '' }}" href="{{ route('provider-unavailabilities.create') }}" aria-label="Report unavailability" @if(request()->routeIs('provider-unavailabilities.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Report unavailability</span></a></li>
+                        @elseif (auth()->user()->hasRole('nurse') && auth()->user()->can('manage-provider-schedules'))
+                            <li><a class="nav-link{{ request()->routeIs('provider-unavailabilities.*') ? ' active' : '' }}" href="{{ route('provider-unavailabilities.create') }}" aria-label="Report unavailability" @if(request()->routeIs('provider-unavailabilities.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Report unavailability</span></a></li>
+                        @endif
+                        @if (auth()->user()->hasAnyRole(['registration', 'admin', 'super-admin']))
+                            <li><a class="nav-link{{ request()->routeIs('privacy.requests.queue') ? ' active' : '' }}" href="{{ route('privacy.requests.queue') }}" aria-label="Data subject requests"><i class="ph-fill ph-lock-key" aria-hidden="true"></i><span class="nav-label">Privacy requests</span></a></li>
+                        @endif
                         @can('view-patients')
                         <li class="nav-accordion{{ request()->routeIs('patients.*') ? ' is-expanded is-active' : '' }}">
                             <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('patients.*') ? 'true' : 'false' }}" aria-controls="nav-patients" aria-label="Patient Management"><i class="ph-fill ph-users-three" aria-hidden="true"></i><span class="nav-label">Patients</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
@@ -86,13 +99,14 @@
                             $careDeliveryVisibleLinks = [];
                             if (auth()->user()->can('view-appointments')) { $careDeliveryVisibleLinks[] = 'appointments'; }
                             if (auth()->user()->can('view-encounters')) { $careDeliveryVisibleLinks[] = 'encounters'; }
+                            if (auth()->user()->can('view-care-requests') && auth()->user()->hasAnyRole(['doctor','nurse','registration','super-admin'])) { $careDeliveryVisibleLinks[] = 'care-requests'; }
                             if (auth()->user()->can('view-telehealth') && auth()->user()->hasAnyRole(['doctor','nurse','super-admin'])) { $careDeliveryVisibleLinks[] = 'telehealth'; }
                             if (auth()->user()->can('view-er') && auth()->user()->hasAnyRole(['nurse','doctor','super-admin','registration'])) { $careDeliveryVisibleLinks[] = 'er'; }
                         @endphp
                         @if (! $isPatientUser || ! empty($careDeliveryVisibleLinks))
-                        <li class="nav-accordion{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? ' is-expanded is-active' : '' }}">
-                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? 'true' : 'false' }}" aria-controls="nav-care" aria-label="Care Delivery"><i class="ph-fill ph-heartbeat" aria-hidden="true"></i><span class="nav-label">Care Delivery</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
-                            <ul class="nav-submenu" id="nav-care" @if(!request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'telehealth.*', 'emergency.*', 'doctors.queue*')) hidden @endif>
+                        <li class="nav-accordion{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? ' is-expanded is-active' : '' }}">
+                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? 'true' : 'false' }}" aria-controls="nav-care" aria-label="Care Delivery"><i class="ph-fill ph-heartbeat" aria-hidden="true"></i><span class="nav-label">Care Delivery</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
+                            <ul class="nav-submenu" id="nav-care" @if(!request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*')) hidden @endif>
                                 @can('view-appointments')
                                     <li><a href="{{ route('appointments.index') }}" class="{{ request()->routeIs('appointments.*') ? 'active' : '' }}">Appointments</a></li>
                                 @endcan
@@ -102,6 +116,11 @@
                                     @endif
                                     @if (auth()->user()->hasAnyRole(['doctor','super-admin']))
                                         <li><a href="{{ route('doctors.queue') }}" class="{{ request()->routeIs('doctors.queue') ? 'active' : '' }}">Doctor Queue</a></li>
+                                    @endif
+                                @endcan
+                                @can('view-care-requests')
+                                    @if (auth()->user()->hasAnyRole(['doctor','nurse','registration','super-admin']))
+                                        <li><a href="{{ route('care-requests.index') }}" class="{{ request()->routeIs('care-requests.*') ? 'active' : '' }}">Outpatient approvals</a></li>
                                     @endif
                                 @endcan
                                 @can('view-telehealth')
@@ -142,7 +161,7 @@
                         @endif
 
                         @php
-                            $canViewReports = $user->can('view-reports') && $user->hasRole('super-admin');
+                            $canViewReports = $user->can('view-reports') && $user->hasAnyRole(['admin', 'super-admin']);
                             $canViewAuditLogs = $user->can('view-audit-logs') && $user->hasRole('super-admin');
                             $showOperationsMenu = $canViewReports || $canViewAuditLogs;
                         @endphp
@@ -164,7 +183,7 @@
                         @endif
                     </ul>
                     @endif
-                    @if ($user->hasRole('super-admin'))
+                    @if ($user->hasAnyRole(['admin', 'super-admin']))
                         <p class="nav-title">Administration</p>
                         <ul class="nav-list">
                             @can('manage-users')
@@ -181,7 +200,7 @@
                     <div class="sidebar-profile-wrap">
                         <button class="sidebar-profile" id="profile-toggle" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
                             <span class="profile-avatar" aria-hidden="true">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
-                            <span class="profile-info"><span class="profile-name">{{ auth()->user()->name }}</span><span class="profile-role">{{ auth()->user()->roles->pluck('name')->join(', ') }}</span></span>
+                            <span class="profile-info"><span class="profile-name">{{ auth()->user()->name }}</span><span class="profile-role">{{ auth()->user()->roles->pluck('display_name')->unique()->join(', ') }}</span></span>
                             <i class="ph ph-caret-up-down profile-chevron" aria-hidden="true"></i>
                         </button>
                         <div class="profile-menu" id="profile-menu" role="menu" hidden>
@@ -227,7 +246,7 @@
                             <div class="dashboard-header-actions">
                                 <div class="dashboard-session">
                                     <strong>{{ auth()->user()->name }}</strong>
-                                    <span>{{ auth()->user()->roles->pluck('name')->join(', ') }}</span>
+                                    <span>{{ auth()->user()->roles->pluck('display_name')->unique()->join(', ') }}</span>
                                 </div>
                             </div>
                         </header>
@@ -235,6 +254,16 @@
 
                     @if (session('success'))
                         <div class="hims-notification hims-notification--success hims-notification--banner">{{ session('success') }}</div>
+                    @endif
+                    @if (! config('security.otp_enabled', true) && auth()->user()->hasAnyRole(['admin', 'super-admin']))
+                        <div role="alert" class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+                            Security warning: email one-time password verification is disabled.
+                        </div>
+                    @endif
+                    @if (auth()->user()->hasAnyRole(['admin', 'super-admin']) && (config('telehealth.provider') === 'jitsi_demo' || (blank(config('telehealth.provider')) && ! app(\App\Services\ZoomService::class)->enabled())))
+                        <div role="alert" class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-950">
+                            Demo video mode: not suitable for real patient consultations.
+                        </div>
                     @endif
                     @if (session('error'))
                         <div class="hims-notification hims-notification--danger hims-notification--banner">{{ session('error') }}</div>
@@ -259,6 +288,13 @@
 
     <div id="modal-portal" aria-live="polite"></div>
     <div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="idle-session-warning" aria-labelledby="idle-session-title" class="fixed inset-0 m-auto w-[min(92vw,28rem)] rounded-xl border border-amber-300 bg-white p-6 shadow-xl backdrop:bg-slate-900/50">
+        <h2 id="idle-session-title" class="text-lg font-semibold text-slate-900">Your session is about to expire</h2>
+        <p class="mt-2 text-sm text-slate-600">For your privacy, you will be signed out in <strong id="idle-session-countdown">30</strong> seconds due to inactivity.</p>
+        <div class="mt-5 flex justify-end">
+            <button id="idle-session-stay" type="button" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Stay signed in</button>
+        </div>
+    </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('assets/js/core/theme-boot.js') }}"></script>
@@ -266,52 +302,118 @@
     <script src="{{ asset('assets/js/core/app-shell.js') }}"></script>
     <script>
         (() => {
-            const heartbeatUrl = '{{ route('heartbeat') }}';
+            const warning = document.getElementById('idle-session-warning');
+            if (!warning || @json(request()->routeIs('telehealth.join', 'telehealth.connect'))) return;
+
+            const idleMs = {{ (int) config('security.session_idle_minutes', 5) * 1000 * 60 }};
+            const warningMs = Math.min({{ (int) config('security.session_warning_seconds', 30) * 1000 }}, idleMs);
+            const heartbeatUrl = @json(route('session.heartbeat'));
+            const logoutUrl = @json(route('logout'));
+            const loginUrl = @json(route('login'));
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-            const heartbeatIntervalMs = 45000;
+            const stayButton = document.getElementById('idle-session-stay');
+            const countdown = document.getElementById('idle-session-countdown');
+            let warningTimer;
+            let expiryTimer;
+            let countdownTimer;
             let lastHeartbeatAt = 0;
+            let heartbeatInFlight = null;
 
-            function sendHeartbeat() {
-                if (!heartbeatUrl || !csrfToken) {
-                    return;
-                }
-
-                const now = Date.now();
-                if (now - lastHeartbeatAt < heartbeatIntervalMs) {
-                    return;
-                }
-
-                lastHeartbeatAt = now;
-
-                fetch(heartbeatUrl, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                }).catch(() => {
-                    // Ignore heartbeat failures here; the main page requests will handle inactivity if the session is stale.
-                });
+            function clearTimers() {
+                window.clearTimeout(warningTimer);
+                window.clearTimeout(expiryTimer);
+                window.clearInterval(countdownTimer);
             }
 
-            ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach((eventName) => {
-                document.addEventListener(eventName, sendHeartbeat, {
-                    capture: true,
-                    passive: true,
-                });
-            });
+            function startCountdown() {
+                let secondsLeft = Math.ceil(warningMs / 1000);
+                countdown.textContent = String(secondsLeft);
+                countdownTimer = window.setInterval(() => {
+                    secondsLeft -= 1;
+                    countdown.textContent = String(Math.max(0, secondsLeft));
+                }, 1000);
+            }
 
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
-                    sendHeartbeat();
+            async function confirmActivity() {
+                if (heartbeatInFlight) return heartbeatInFlight;
+                lastHeartbeatAt = Date.now();
+                heartbeatInFlight = (async () => {
+                try {
+                    const response = await fetch(heartbeatUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    if (response.ok) {
+                        return true;
+                    }
+                } catch (error) {
+                    console.error('Unable to renew the session.', error);
+                } finally {
+                    heartbeatInFlight = null;
+                }
+
+                window.location.assign(loginUrl + '?timeout=1');
+                return false;
+                })();
+
+                return heartbeatInFlight;
+            }
+
+            async function expireSession() {
+                clearTimers();
+                try {
+                    await fetch(logoutUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                } catch (error) {
+                    console.error('Unable to end the expired session.', error);
+                } finally {
+                    window.location.assign(loginUrl + '?timeout=1');
+                }
+            }
+
+            function armTimers() {
+                clearTimers();
+                if (warning.open) warning.close();
+                warningTimer = window.setTimeout(() => {
+                    warning.showModal();
+                    startCountdown();
+                }, Math.max(0, idleMs - warningMs));
+                expiryTimer = window.setTimeout(expireSession, idleMs);
+            }
+
+            stayButton.addEventListener('click', async () => {
+                if (await confirmActivity()) {
+                    warning.close();
+                    armTimers();
                 }
             });
-
-            window.addEventListener('load', sendHeartbeat, { once: true });
+            ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((eventName) => {
+                document.addEventListener(eventName, () => {
+                    armTimers();
+                    if (Date.now() - lastHeartbeatAt >= 60000) {
+                        confirmActivity();
+                    }
+                }, { capture: true, passive: true });
+            });
+            armTimers();
         })();
     </script>
     @stack('scripts')
+    <footer class="border-t border-slate-200 bg-white px-4 py-4 text-center text-sm text-slate-600">
+        <a class="underline" href="{{ route('privacy.notice') }}">Privacy Notice</a>
+        <span class="px-2">·</span>
+        <a class="underline" href="{{ route('privacy.terms') }}">Terms and Agreement</a>
+    </footer>
 </body>
 </html>

@@ -10,6 +10,7 @@
     </div>
 
     @include('reports._date-form')
+    @include('reports._export-links', ['report' => 'encounters'])
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="p-5 bg-white rounded-xl border border-slate-200"><div class="text-3xl font-bold">{{ $encounters->count() }}</div><div class="text-sm text-slate-500">Total encounters</div></div>

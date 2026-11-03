@@ -63,6 +63,19 @@
                         @error('password_confirmation')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
 
+                    <div class="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                        <label class="flex items-start gap-3">
+                            <input type="checkbox" name="privacy_notice_accepted" value="1" required @checked(old('privacy_notice_accepted')) class="mt-1">
+                            <span>I have read and acknowledge the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.notice') }}" target="_blank" rel="noopener">Privacy Notice</a> (version {{ config('privacy.notice_version') }}).</span>
+                        </label>
+                        @error('privacy_notice_accepted')<p class="text-red-700">{{ $message }}</p>@enderror
+                        <label class="flex items-start gap-3">
+                            <input type="checkbox" name="terms_accepted" value="1" required @checked(old('terms_accepted')) class="mt-1">
+                            <span>I have read and agree to the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.terms') }}" target="_blank" rel="noopener">Terms and Agreement</a> (version {{ config('privacy.terms_version') }}).</span>
+                        </label>
+                        @error('terms_accepted')<p class="text-red-700">{{ $message }}</p>@enderror
+                    </div>
+
                     <button class="btn-primary login-submit" type="submit"><i class="ph ph-user-plus" aria-hidden="true"></i>Create account</button>
                 </form>
 

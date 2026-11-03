@@ -12,12 +12,15 @@ use App\Services\AdmissionService;
 use App\Services\BillingAggregationService;
 use App\Services\EncounterService;
 use App\Services\PrescriptionService;
+use App\Http\Requests\RequestFollowUpRequest;
+use App\Notifications\AppointmentJourneyNotification;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class EncounterController extends Controller
 {
-    public function __construct(protected EncounterService $encounters) {}
+    public function __construct(protected EncounterService $encounters, protected AuditLogService $audit) {}
 
     public function index(Request $request)
     {
@@ -154,7 +157,27 @@ class EncounterController extends Controller
 
     public function show(Encounter $encounter, BillingAggregationService $billing)
     {
-        $encounter->load(['patient', 'provider', 'appointment.vitals', 'vitals', 'admission', 'notes.author', 'prescriptions.prescribedBy', 'dischargeSummary']);
+        $encounter->load([
+            'patient',
+            'provider',
+            'appointment.vitals',
+            'vitals',
+            'admission',
+            'notes.author',
+            'prescriptions.prescribedBy',
+            'dischargeSummary',
+            'careRequests.requestedBy',
+            'careRequests.decidedBy',
+            'careRequests.clinicalDocument',
+            'careRequests.statusHistories.user',
+        ]);
+        if (auth()->user()->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin'])) {
+            $this->audit->viewPatientClinicalData(
+                (int) $encounter->patient_id,
+                'encounter',
+                (int) $encounter->id
+            );
+        }
         $inpatientAdmission = Admission::query()
             ->with(['attendingProvider', 'dischargeSummary'])
             ->where('patient_id', $encounter->patient_id)
@@ -187,6 +210,29 @@ class EncounterController extends Controller
         $prescriptions->createForEncounter($encounter, $data, $request->user());
 
         return redirect()->route('encounters.show', $encounter)->with('success', 'Prescription saved.');
+    }
+
+    public function requestFollowUp(RequestFollowUpRequest $request, Encounter $encounter)
+    {
+        abort_unless($request->user()->hasRole('doctor')
+            && $request->user()->provider?->id === $encounter->provider_id, 403);
+
+        $data = $request->validated();
+        $encounter->update(['follow_up_date' => $data['follow_up_date']]);
+        $this->audit->log('REQUEST_FOLLOW_UP', 'encounter', $encounter->id, 'SUCCESS', [
+            'suggested_date' => $data['follow_up_date'],
+            'has_recommendation' => filled($data['recommendation'] ?? null),
+        ], $request->user()->id);
+        $patientUser = $encounter->patient?->user;
+        if ($patientUser) {
+            $message = 'Your doctor recommends a follow-up around '.\Illuminate\Support\Carbon::parse($data['follow_up_date'])->format('M j, Y').'.';
+            if (filled($data['recommendation'] ?? null)) {
+                $message .= ' '.$data['recommendation'];
+            }
+            $patientUser->notify(new AppointmentJourneyNotification('Follow-up recommended', $message));
+        }
+
+        return redirect()->route('encounters.show', $encounter)->with('success', 'Follow-up recommendation saved.');
     }
 
     public function complete(Request $request, Encounter $encounter)

@@ -49,9 +49,9 @@ class PrebookingSymptomCheckerTest extends TestCase
         $this->actingAs($registration)
             ->get(route('symptom-checker.show', $check))
             ->assertOk()
-            ->assertSee('decision support only, not a diagnosis')
-            ->assertSee('for clinical validation')
-            ->assertSee('Continue to booking');
+            ->assertSee('AI-assisted suggestion. Final decision belongs to a healthcare professional.')
+            ->assertSee('This is not a medical diagnosis.')
+            ->assertSee('Book Appointment');
 
         $outpatientType = AppointmentType::where('name', 'Outpatient')->firstOrFail();
         $this->actingAs($registration)
@@ -65,6 +65,8 @@ class PrebookingSymptomCheckerTest extends TestCase
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
         $otherPatient = Patient::factory()->create();
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $patientUser, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $patientUser, 'self');
         app(PatientConsentService::class)->record($patient, 'AI_ASSISTED', true, $patientUser, 'self');
 
         $response = $this->actingAs($patientUser)->post(route('symptom-checker.store'), [

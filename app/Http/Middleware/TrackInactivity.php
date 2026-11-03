@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\AuditLogService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -9,7 +10,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class TrackInactivity
 {
-    public const IDLE_TIMEOUT = 900; // 15 minutes in seconds
+    public function __construct(private readonly AuditLogService $audit)
+    {
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -24,10 +27,12 @@ class TrackInactivity
         }
 
         $lastSeen = $user->last_activity_at;
-        $timeoutSeconds = (int) config('inactivity.timeout', self::IDLE_TIMEOUT);
+        $timeoutSeconds = (int) config('security.session_idle_minutes', 5) * 60;
         $threshold = now()->subSeconds($timeoutSeconds);
 
-        if ($lastSeen !== null && $lastSeen->lt($threshold)) {
+        $isTelehealthJoin = $request->routeIs('telehealth.join', 'telehealth.connect', 'telehealth.leave');
+        if (! $isTelehealthJoin && $lastSeen !== null && $lastSeen->lt($threshold)) {
+            $this->audit->log('SESSION_TIMEOUT', 'authentication', $user->id);
             if (Auth::guard('web')->check() && $request->hasSession()) {
                 Auth::guard('web')->logout();
                 $request->session()->invalidate();
@@ -43,9 +48,10 @@ class TrackInactivity
             return redirect()->route('login')->with('status', 'You have been logged out due to inactivity.');
         }
 
-        $user->forceFill(['last_activity_at' => now()])->save();
+        if ($isTelehealthJoin || ! $lastSeen || $lastSeen->gte($threshold)) {
+            $user->forceFill(['last_activity_at' => now()])->save();
+        }
 
         return $next($request);
     }
 }
-

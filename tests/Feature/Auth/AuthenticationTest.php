@@ -12,6 +12,12 @@ class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['security.otp_enabled' => false]);
+    }
+
     public function test_login_screen_can_be_rendered(): void
     {
         $response = $this->get('/login');
@@ -53,12 +59,12 @@ class AuthenticationTest extends TestCase
         $this->assertTrue(config('session.expire_on_close'));
     }
 
-    public function test_inactivity_timeout_is_set_to_three_minutes(): void
+    public function test_inactivity_timeout_is_set_to_five_minutes(): void
     {
-        $this->assertSame(180, config('inactivity.timeout'));
+        $this->assertSame(5, config('security.session_idle_minutes'));
     }
 
-    public function test_heartbeat_keeps_user_logged_in_within_three_minute_window(): void
+    public function test_heartbeat_keeps_user_logged_in_within_five_minute_window(): void
     {
         $user = User::factory()->create([
             'last_activity_at' => now()->subSeconds(100),
@@ -73,10 +79,10 @@ class AuthenticationTest extends TestCase
         $this->assertTrue($user->last_activity_at->diffInSeconds(now()) < 10);
     }
 
-    public function test_user_without_heartbeat_for_over_three_minutes_is_logged_out_on_next_request(): void
+    public function test_user_without_heartbeat_for_over_five_minutes_is_logged_out_on_next_request(): void
     {
         $user = User::factory()->create([
-            'last_activity_at' => now()->subSeconds(181),
+            'last_activity_at' => now()->subSeconds(301),
         ]);
 
         $response = $this->actingAs($user, 'web')->get('/dashboard');
@@ -189,7 +195,7 @@ class AuthenticationTest extends TestCase
     public function test_stale_inactivity_logs_user_out_and_redirects_to_login(): void
     {
         $user = User::factory()->create([
-            'last_activity_at' => now()->subSeconds(901),
+            'last_activity_at' => now()->subSeconds(301),
         ]);
 
         $response = $this->actingAs($user, 'web')->get('/dashboard');

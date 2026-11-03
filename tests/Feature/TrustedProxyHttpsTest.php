@@ -41,6 +41,7 @@ class TrustedProxyHttpsTest extends TestCase
         config([
             'trustedproxy.proxies' => '127.0.0.1',
             'session.secure' => false,
+            'security.otp_enabled' => false,
         ]);
         $this->app->detectEnvironment(fn () => 'production');
 

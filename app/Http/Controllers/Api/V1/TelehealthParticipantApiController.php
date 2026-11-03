@@ -8,7 +8,6 @@ use App\Services\TelehealthService;
 use App\Services\PatientConsentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 
 class TelehealthParticipantApiController extends Controller
 {
@@ -20,6 +19,7 @@ class TelehealthParticipantApiController extends Controller
     public function store(Request $request, int $sessionId): JsonResponse
     {
         $session = TelehealthSession::findOrFail($sessionId);
+        abort_unless($request->user()->can('addParticipant', $session), 403, 'You are not authorized.');
         $patient = $session->appointment?->patient;
         if (! $patient || ! $this->consents->hasCurrentGrant($patient, 'TELEHEALTH')) {
             return response()->json([
@@ -31,20 +31,9 @@ class TelehealthParticipantApiController extends Controller
             ], 403);
         }
 
-        if ($request->user()?->hasRole('patient')) {
-            $patientId = $request->user()->patient?->id;
-            $sessionPatientId = $session->appointment?->patient_id;
-
-            if ($patientId === null || $sessionPatientId !== $patientId) {
-                abort(403, 'You can only add participants to your own telehealth session.');
-            }
-        }
-
-        abort_unless(Gate::allows('join-telehealth'), 403, 'You are not authorized.');
-
         $data = $request->validate([
             'participant_type' => ['required', 'in:provider,patient,guardian,caregiver'],
-            'participant_id' => ['required', 'integer'],
+            'participant_id' => ['required', 'integer', 'exists:users,id'],
         ]);
 
         $participant = $this->telehealthService->addParticipant(
@@ -63,17 +52,7 @@ class TelehealthParticipantApiController extends Controller
     public function index(Request $request, int $sessionId): JsonResponse
     {
         $session = TelehealthSession::findOrFail($sessionId);
-
-        if ($request->user()?->hasRole('patient')) {
-            $patientId = $request->user()->patient?->id;
-            $sessionPatientId = $session->appointment?->patient_id;
-
-            if ($patientId === null || $sessionPatientId !== $patientId) {
-                abort(403, 'You can only view participants for your own telehealth session.');
-            }
-        }
-
-        abort_unless(Gate::allows('view', $session), 403, 'You are not authorized.');
+        abort_unless($request->user()->can('view', $session), 403, 'You are not authorized.');
 
         $participants = $session->participants()->get();
 

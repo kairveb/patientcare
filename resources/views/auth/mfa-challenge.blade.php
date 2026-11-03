@@ -26,11 +26,22 @@
                 <header class="login-card-header">
                     <p class="page-kicker">Secure verification</p>
                     <h2 id="mfa-title">Two-Factor Authentication</h2>
-                    <p class="login-help">Enter the 6-digit code from your authenticator app to continue.</p>
+                    <p class="login-help">
+                        @if ($challengeMethod === 'totp')
+                            Enter the 6-digit code from your authenticator app to continue.
+                        @else
+                            Enter the 6-digit code sent to {{ $maskedEmail }} to continue.
+                        @endif
+                    </p>
                 </header>
 
                 @if (session('status'))
                     <x-auth-session-status class="mb-4" :status="session('status')" />
+                @endif
+                @if (! config('security.otp_enabled', true) && auth()->check() && auth()->user()->hasAnyRole(['admin', 'super-admin']))
+                    <div role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                        Email one-time password verification is disabled. Password-only sign-in is less secure.
+                    </div>
                 @endif
 
                 @if ($errors->any())
@@ -51,6 +62,13 @@
 
                     <button class="btn-primary login-submit" type="submit"><i class="ph ph-lock-key-open" aria-hidden="true"></i>Verify &amp; Sign In</button>
                 </form>
+
+                @if ($challengeMethod === 'email')
+                    <form method="POST" action="{{ route('mfa.resend') }}" class="mt-3 text-center">
+                        @csrf
+                        <button type="submit" class="text-sm font-medium text-teal-700 underline">Send a new code</button>
+                    </form>
+                @endif
 
                 <div class="login-support" aria-label="Verification help">
                     <i class="ph ph-question" aria-hidden="true"></i>

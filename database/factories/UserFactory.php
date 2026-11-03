@@ -19,6 +19,13 @@ class UserFactory extends Factory
      */
     protected static ?string $password;
 
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        });
+    }
+
     /**
      * Define the model's default state.
      *
@@ -42,7 +49,9 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
-        ]);
+        ])->afterCreating(function (User $user): void {
+            $user->forceFill(['email_verified_at' => null])->save();
+        });
     }
 
     public function nurse(): static

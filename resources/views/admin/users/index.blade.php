@@ -7,7 +7,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold text-slate-800">User Management</h1>
-            <p class="mt-1 text-sm text-slate-500">Create accounts, assign one of the five system roles, and deactivate accounts.</p>
+            <p class="mt-1 text-sm text-slate-500">Create and manage accounts. Super Admin accounts are restricted to Super Admin operators.</p>
         </div>
         <a href="{{ route('admin.users.create') }}" class="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">Create user</a>
     </div>
@@ -24,7 +24,7 @@
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table class="min-w-full divide-y divide-slate-200 text-sm">
             <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr><th class="px-4 py-3">User</th><th class="px-4 py-3">Role</th><th class="px-4 py-3">Account status</th><th class="px-4 py-3">Actions</th></tr>
+                <tr><th class="px-4 py-3">User</th><th class="px-4 py-3">Username</th><th class="px-4 py-3">Role</th><th class="px-4 py-3">Account status</th><th class="px-4 py-3">Actions</th></tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse ($users as $managedUser)
@@ -33,6 +33,7 @@
                             <div class="font-medium text-slate-800">{{ $managedUser->name }}</div>
                             <div class="text-slate-500">{{ $managedUser->email }}</div>
                         </td>
+                        <td class="px-4 py-4 font-mono text-slate-700">{{ $managedUser->username ?? '—' }}</td>
                         <td class="px-4 py-4">
                             <form method="POST" action="{{ route('admin.users.role', $managedUser) }}" class="flex flex-wrap gap-2">
                                 @csrf
@@ -78,7 +79,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No user accounts found.</td></tr>
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No user accounts found.</td></tr>
                 @endforelse
             </tbody>
         </table>

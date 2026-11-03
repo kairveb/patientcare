@@ -16,13 +16,20 @@ class UserAdministrationService
     ) {
     }
 
-    public function create(array $data): User
+    public function create(array $data, User $actor): User
     {
-        return DB::transaction(function () use ($data): User {
+        if (! $actor->hasAnyRole(['admin', 'super-admin']) || ! $actor->hasPermission('manage-users')
+            || ($data['role'] === 'super-admin' && ! $actor->hasRole('super-admin'))
+            || ($data['role'] === 'doctor' && $actor->hasRole('admin') && ! $actor->hasPermission('manage-doctors'))) {
+            abort(403);
+        }
+
+        return DB::transaction(function () use ($data, $actor): User {
             $role = $this->role($data['role']);
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
+                'username' => $this->uniqueUsername($data['username'] ?? null, $data['email']),
                 'password' => $data['password'],
             ]);
             $user->roles()->sync([$role->id]);
@@ -44,7 +51,7 @@ class UserAdministrationService
 
             $this->audit->log('ADMIN_CREATE_USER', 'user', $user->id, 'SUCCESS', [
                 'role' => $role->name,
-            ]);
+            ], $actor->id);
 
             return $user;
         });
@@ -52,6 +59,7 @@ class UserAdministrationService
 
     public function assignRole(User $user, array $data, User $actor): User
     {
+        abort_unless($actor->hasAnyRole(['admin', 'super-admin']) && $actor->hasPermission('manage-users'), 403);
         if ($user->is($actor)) {
             throw ValidationException::withMessages([
                 'role' => ['You cannot change your own role.'],
@@ -63,6 +71,11 @@ class UserAdministrationService
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $role = $this->role($data['role']);
             $previousRoles = $lockedUser->roles()->pluck('name')->all();
+            if ((! $actor->hasRole('super-admin') && in_array('super-admin', $previousRoles, true))
+                || (! $actor->hasRole('super-admin') && $role->name === 'super-admin')
+                || ($role->name === 'doctor' && $actor->hasRole('admin') && ! $actor->hasPermission('manage-doctors'))) {
+                abort(403);
+            }
 
             if (in_array('super-admin', $previousRoles, true) && $lockedUser->is_active && $data['role'] !== 'super-admin') {
                 if ($activeAdministrators->count() <= 1) {
@@ -100,6 +113,7 @@ class UserAdministrationService
 
     public function setActive(User $user, bool $active, User $actor): User
     {
+        abort_unless($actor->hasAnyRole(['admin', 'super-admin']) && $actor->hasPermission('manage-users'), 403);
         if ($user->is($actor) && ! $active) {
             throw ValidationException::withMessages([
                 'is_active' => ['You cannot deactivate your own account.'],
@@ -110,6 +124,9 @@ class UserAdministrationService
             $activeAdministrators = $this->lockActiveSuperAdmins();
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $isSuperAdmin = $lockedUser->hasRole('super-admin');
+            if (! $actor->hasRole('super-admin') && $isSuperAdmin) {
+                abort(403);
+            }
 
             if (! $active && $lockedUser->is_active && $isSuperAdmin) {
                 if ($activeAdministrators->count() <= 1) {
@@ -134,9 +151,25 @@ class UserAdministrationService
 
     private function role(string $name): Role
     {
-        return Role::query()->whereIn('name', ['super-admin', 'patient', 'nurse', 'doctor', 'registration'])
+        return Role::query()->whereIn('name', ['super-admin', 'patient', 'nurse', 'doctor', 'registration', 'admin'])
             ->where('name', $name)
             ->firstOrFail();
+    }
+
+    private function uniqueUsername(?string $requested, string $email): string
+    {
+        $base = strtolower($requested ?: (string) strstr($email, '@', true));
+        $base = trim((string) preg_replace('/[^a-z0-9._-]+/', '', $base), '._-');
+        $base = substr($base !== '' ? $base : 'user', 0, 180);
+        $username = $base;
+        $suffix = 1;
+
+        while (User::query()->where('username', $username)->exists()) {
+            $tail = (string) $suffix++;
+            $username = substr($base, 0, 190 - strlen($tail)).$tail;
+        }
+
+        return $username;
     }
 
     private function lockActiveSuperAdmins()

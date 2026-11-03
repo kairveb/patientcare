@@ -25,6 +25,7 @@ class TelehealthEmergencyEscalationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -60,6 +61,7 @@ class TelehealthEmergencyEscalationTest extends TestCase
 
         $patientUser = $this->userWithRole('patient');
         $patient->update(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         $this->actingAs($patientUser)
             ->get(route('telehealth.join', ['session' => $session, 'token' => $session->secureJoinToken()]))
             ->assertForbidden();
@@ -124,6 +126,7 @@ class TelehealthEmergencyEscalationTest extends TestCase
     private function userWithRole(string $roleName): User
     {
         $user = User::factory()->create(['email' => $roleName.'-'.Str::uuid().'@example.test']);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->attach(Role::where('name', $roleName)->firstOrFail());
 
         return $user;

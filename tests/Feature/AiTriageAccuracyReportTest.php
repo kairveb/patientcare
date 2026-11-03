@@ -41,7 +41,8 @@ class AiTriageAccuracyReportTest extends TestCase
             ->assertSee('50.00%')
             ->assertSee('excluded from accuracy metrics');
 
-        $export = $this->actingAs($admin)->get(route('reports.ai-triage-accuracy.export', $query));
+        $export = $this->withSession(['auth.password_confirmed_at' => time()])
+            ->actingAs($admin)->get(route('reports.ai-triage-accuracy.export', $query));
         $export->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('Confusion matrix (rows: final level; columns: AI-suggested level)', $export->streamedContent());
         $this->assertStringContainsString('Emergency,2,1,1,50,100', $export->streamedContent());

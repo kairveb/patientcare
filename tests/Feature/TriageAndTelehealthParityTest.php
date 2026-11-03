@@ -42,8 +42,9 @@ class TriageAndTelehealthParityTest extends TestCase
 
     public function test_telehealth_session_generates_local_join_link_when_zoom_is_disabled(): void
     {
+        config(['telehealth.provider' => 'jitsi_demo']);
         $zoom = \Mockery::mock(\App\Services\ZoomService::class);
-        $zoom->shouldReceive('enabled')->once()->andReturn(false);
+        $zoom->shouldReceive('enabled')->andReturn(false);
 
         $patient = Patient::create([
             'mrn' => 'MRN-TEST-001-A',
@@ -78,9 +79,11 @@ class TriageAndTelehealthParityTest extends TestCase
         $service = new \App\Services\TelehealthService($zoom);
         $session = $service->createSession($appointment);
 
-        $this->assertNotNull($session->join_url);
-        $this->assertStringContainsString('/telehealth/' . $session->id . '/join', $session->join_url);
-        $this->assertNotSame(TelehealthSession::STATUS_NOT_CONFIGURED, $session->status);
+        $this->assertNull($session->join_url);
+        $this->assertSame(TelehealthSession::STATUS_SCHEDULED, $session->status);
+        $details = $service->providerJoinDetails($session, User::findOrFail($provider->user_id));
+        $this->assertSame('jitsi_demo', $details['provider']);
+        $this->assertMatchesRegularExpression('/^HIMS-[A-F0-9]{28}$/', $details['room_name']);
     }
 
     public function test_telehealth_session_generates_zoom_join_link_when_zoom_is_enabled(): void
@@ -88,6 +91,7 @@ class TriageAndTelehealthParityTest extends TestCase
         $zoom = \Mockery::mock(\App\Services\ZoomService::class);
         $zoom->shouldReceive('enabled')->once()->andReturn(true);
         $zoom->shouldReceive('createMeeting')->once()->with(\Mockery::type('array'))->andReturn([
+            'password' => 'FAKEPASS1',
             'meeting_id' => 'zoom-12345',
             'join_url' => 'https://us05web.zoom.us/j/12345?pwd=abc',
             'start_url' => 'https://us05web.zoom.us/s/12345?pwd=abc',

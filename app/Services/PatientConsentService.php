@@ -57,6 +57,11 @@ class PatientConsentService
     ): PatientConsent {
         abort_unless(isset(config('consents.types')[$type]), 422, 'Unknown consent type.');
         abort_unless(in_array($channel, ['self', 'staff'], true), 422, 'Unknown consent channel.');
+        abort_if(
+            ! $granted && (bool) config("consents.types.{$type}.required", false),
+            422,
+            'This consent is required and cannot be withdrawn here.'
+        );
 
         return DB::transaction(function () use ($patient, $type, $granted, $recordedBy, $channel): PatientConsent {
             $version = config("consents.types.{$type}.version");

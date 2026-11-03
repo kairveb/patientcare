@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Appointment;
+use App\Models\AppointmentSlot;
 use App\Models\DemoRecord;
 use App\Models\Patient;
 use App\Notifications\AppointmentReminderNotification;
@@ -104,9 +105,17 @@ class AppointmentReminderTest extends TestCase
             'reminder_24h_sent_at' => now(),
             'reminder_1h_sent_at' => now(),
         ]);
+        $startsAt = now()->addDays(2)->setTime(10, 0);
+        $slot = AppointmentSlot::create([
+            'provider_id' => $appointment->provider_id,
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->copy()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_AVAILABLE,
+        ]);
 
         app(AppointmentService::class)->reschedule($appointment, [
-            'starts_at' => now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
+            'starts_at' => $startsAt->toDateTimeString(),
+            'appointment_slot_id' => $slot->id,
         ]);
 
         $this->assertNull($appointment->fresh()->reminder_24h_sent_at);

@@ -17,8 +17,9 @@ class TelehealthServiceCreateTest extends TestCase
 {
     public function test_create_session_creates_a_session_with_default_status(): void
     {
+        config(['telehealth.provider' => 'jitsi_demo']);
         $zoom = Mockery::mock(ZoomService::class);
-        $zoom->shouldReceive('enabled')->once()->andReturn(false);
+        $zoom->shouldReceive('enabled')->andReturn(false);
 
         $service = new TelehealthService($zoom);
 
@@ -52,11 +53,10 @@ class TelehealthServiceCreateTest extends TestCase
         $this->assertInstanceOf(TelehealthSession::class, $session);
         $this->assertSame($appointment->id, $session->appointment_id);
         $this->assertSame(TelehealthSession::STATUS_SCHEDULED, $session->status);
-        $this->assertNotNull($session->join_url);
-        $this->assertStringContainsString('/telehealth/' . $session->id . '/join', $session->join_url);
-
-        // The token embedded in join_url must still verify after persistence, not just at generation time.
-        parse_str(parse_url($session->join_url, PHP_URL_QUERY) ?? '', $query);
-        $this->assertTrue($service->verifyJoinToken($session->fresh(), $query['token'] ?? null));
+        $this->assertNull($session->join_url);
+        $this->assertSame('jitsi_demo', $service->providerName());
+        $joinDetails = $service->providerJoinDetails($session, $user);
+        $this->assertSame('jitsi_demo', $joinDetails['provider']);
+        $this->assertMatchesRegularExpression('/^HIMS-[A-F0-9]{28}$/', $joinDetails['room_name']);
     }
 }

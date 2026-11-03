@@ -13,6 +13,7 @@ use App\Models\TelehealthReferral;
 use App\Models\TelehealthSession;
 use App\Models\User;
 use App\Services\PatientConsentService;
+use Carbon\Carbon;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -26,11 +27,20 @@ class TelehealthWaitingRoomAndReferralTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
+        config(['telehealth.provider' => 'jitsi_demo']);
         $this->seed(HimsSeeder::class);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_patient_waits_in_provider_queue_and_can_join_only_after_start_and_consent(): void
     {
+        Carbon::setTestNow(today()->setTime(11, 0));
         [$patientUser, $doctor, $session] = $this->telehealthSession();
         $this->telehealthSession(null, $session->appointment->provider, today()->setTime(9, 0));
         $session->update(['start_time' => today()->setTime(10, 0)]);
@@ -57,7 +67,6 @@ class TelehealthWaitingRoomAndReferralTest extends TestCase
 
         $joinUrl = route('telehealth.join', [
             'session' => $session,
-            'token' => $session->secureJoinToken(),
         ]);
         $this->actingAs($patientUser)->get($joinUrl)->assertStatus(409);
         $this->actingAs($patientUser)->getJson("/api/v1/telehealth/{$session->id}/waiting-room")
@@ -94,12 +103,14 @@ class TelehealthWaitingRoomAndReferralTest extends TestCase
             ->assertOk()
             ->assertSee(route('telehealth.join', [
                 'session' => $session,
-                'token' => $session->secureJoinToken(),
             ]), false);
-        $this->actingAs($patientUser)->get($joinUrl)->assertOk();
+        $this->actingAs($patientUser)->get($joinUrl)
+            ->assertOk()
+            ->assertSee('Demo video mode: not suitable for real patient consultations.');
 
         $otherPatient = $this->userWithRole('patient');
-        Patient::factory()->create(['user_id' => $otherPatient->id]);
+        $otherPatientRecord = Patient::factory()->create(['user_id' => $otherPatient->id]);
+        $this->acceptRequiredPrivacyDocuments($otherPatientRecord, $otherPatient);
         $this->actingAs($otherPatient)->get($waitingRoom)->assertForbidden();
         $this->actingAs($otherPatient)->getJson("/api/v1/telehealth/{$session->id}/waiting-room")
             ->assertForbidden();
@@ -213,6 +224,7 @@ class TelehealthWaitingRoomAndReferralTest extends TestCase
     ): array {
         $patientUser ??= $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         $doctor = $provider?->user ?? $this->userWithRole('doctor');
         $department = Department::query()->firstOrFail();
         $provider ??= Provider::create([
@@ -248,6 +260,7 @@ class TelehealthWaitingRoomAndReferralTest extends TestCase
     private function userWithRole(string $roleName): User
     {
         $user = User::factory()->create(['email' => $roleName.'-'.Str::uuid().'@example.test']);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $user->roles()->attach(Role::where('name', $roleName)->firstOrFail());
 
         return $user;

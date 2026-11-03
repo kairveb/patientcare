@@ -10,7 +10,7 @@
             <p class="mt-1 text-sm text-slate-500">{{ $start }} to {{ $end }} · Precision treats the AI suggestion as the prediction and the clinician’s final level as reference.</p>
         </div>
         <div class="flex gap-2">
-            <a href="{{ route('reports.ai-triage-accuracy.export', ['start' => $start, 'end' => $end]) }}" class="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800">Export CSV</a>
+            @include('reports._export-links', ['report' => 'ai-triage-accuracy'])
             <a href="{{ route('reports.index') }}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Back</a>
         </div>
     </div>

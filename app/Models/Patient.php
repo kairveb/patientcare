@@ -89,6 +89,11 @@ class Patient extends Model
         return $this->hasMany(Encounter::class);
     }
 
+    public function careRequests(): HasMany
+    {
+        return $this->hasMany(CareRequest::class);
+    }
+
     public function addresses(): HasMany
     {
         return $this->hasMany(PatientAddress::class);
@@ -107,6 +112,11 @@ class Patient extends Model
     public function consents(): HasMany
     {
         return $this->hasMany(PatientConsent::class);
+    }
+
+    public function dataSubjectRequests(): HasMany
+    {
+        return $this->hasMany(DataSubjectRequest::class);
     }
 
     public function vitals(): HasMany

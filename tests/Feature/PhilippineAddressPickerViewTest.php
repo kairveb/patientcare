@@ -14,6 +14,7 @@ class PhilippineAddressPickerViewTest extends TestCase
     public function test_the_same_picker_is_rendered_in_public_portal_profile_and_staff_forms(): void
     {
         $this->seed(HimsSeeder::class);
+        config(['security.otp_enabled' => false]);
 
         $this->get('/pre-register')
             ->assertOk()
@@ -22,6 +23,7 @@ class PhilippineAddressPickerViewTest extends TestCase
             ->assertSee('/api/v1/address-data/philippines', false);
 
         $patient = User::where('email', 'patient@coor.test')->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patient->patient, $patient);
         $this->actingAs($patient)->get('/portal/pre-register')
             ->assertOk()
             ->assertSee('data-address-select="region"', false);

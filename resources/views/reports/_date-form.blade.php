@@ -1,5 +1,7 @@
 <form method="GET" class="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
-    <div><label class="block text-xs text-slate-500 mb-1">Start</label><input type="date" name="start" value="{{ $start ?? '' }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
-    <div><label class="block text-xs text-slate-500 mb-1">End</label><input type="date" name="end" value="{{ $end ?? '' }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
+    <div><label class="block text-xs text-slate-500 mb-1">Start</label><input type="date" name="start" value="{{ request('start', $start ?? '') }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
+    <div><label class="block text-xs text-slate-500 mb-1">End</label><input type="date" name="end" value="{{ request('end', $end ?? '') }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
+    <div><label class="block text-xs text-slate-500 mb-1">Department</label><select name="department_id" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"><option value="">All departments</option>@foreach ($reportDepartments as $department)<option value="{{ $department->id }}" @selected((string) request('department_id') === (string) $department->id)>{{ $department->name }}</option>@endforeach</select></div>
+    <div><label class="block text-xs text-slate-500 mb-1">Doctor</label><select name="doctor_id" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"><option value="">All doctors</option>@foreach ($reportDoctors as $doctor)<option value="{{ $doctor->id }}" @selected((string) request('doctor_id') === (string) $doctor->id)>{{ $doctor->display_name }}</option>@endforeach</select></div>
     <button type="submit" class="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg">Apply</button>
 </form>

@@ -4,11 +4,25 @@ namespace App\Providers;
 
 use App\Contracts\Icd10CodeValidator;
 use App\Models\Permission;
+use App\Models\CareRequest;
+use App\Models\AppointmentReassignment;
+use App\Models\ProviderUnavailability;
+use App\Models\TelehealthSession;
+use App\Models\DataSubjectRequest;
 use App\Services\Icd10FormatValidator;
+use App\Policies\CareRequestPolicy;
+use App\Policies\AppointmentReassignmentPolicy;
+use App\Policies\ProviderUnavailabilityPolicy;
+use App\Policies\TelehealthSessionPolicy;
+use App\Policies\ProviderPolicy;
+use App\Policies\DataSubjectRequestPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\View;
+use App\Models\Department;
+use App\Models\Provider;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +42,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(CareRequest::class, CareRequestPolicy::class);
+        Gate::policy(AppointmentReassignment::class, AppointmentReassignmentPolicy::class);
+        Gate::policy(ProviderUnavailability::class, ProviderUnavailabilityPolicy::class);
+        Gate::policy(Provider::class, ProviderPolicy::class);
+        Gate::policy(DataSubjectRequest::class, DataSubjectRequestPolicy::class);
+        Gate::policy(TelehealthSession::class, TelehealthSessionPolicy::class);
+        View::composer(['reports.index', 'reports._date-form'], function ($view): void {
+            $view->with([
+                'reportDepartments' => Department::query()->orderBy('name')->get(['id', 'name']),
+                'reportDoctors' => Provider::query()->where('active', true)->orderBy('display_name')->get(['id', 'display_name']),
+            ]);
+        });
+
         if ($this->app->environment('production')) {
             URL::forceRootUrl(rtrim((string) config('app.url'), '/'));
             URL::forceScheme('https');
@@ -93,6 +120,15 @@ class AppServiceProvider extends ServiceProvider
             $key = $user ? "encounter-read:{$role}:{$user->id}" : 'encounter-read:ip:'.$request->ip();
 
             return Limit::perMinute($limit)->by($key);
+        });
+
+        RateLimiter::for('symptom-triage', function (Request $request) {
+            $user = $request->user();
+            $key = $user
+                ? "symptom-triage:user:{$user->id}"
+                : 'symptom-triage:ip:'.$request->ip();
+
+            return Limit::perMinute(5)->by($key);
         });
     }
 

@@ -57,6 +57,7 @@ class PatientAccessParityApiTest extends TestCase
     {
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         app(PatientConsentService::class)->record($patient, 'AI_ASSISTED', true, $patientUser, 'self');
 
         $this->actingAs($patientUser)->postJson('/api/v1/symptom-checks', [

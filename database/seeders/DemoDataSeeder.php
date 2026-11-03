@@ -61,6 +61,7 @@ class DemoDataSeeder extends Seeder
                     'last_activity_at' => now(),
                 ]
             );
+            $user->forceFill(['email_verified_at' => now()])->save();
 
             if ($role === 'super-admin') {
                 $extraUser = User::updateOrCreate(
@@ -72,6 +73,7 @@ class DemoDataSeeder extends Seeder
                         'last_activity_at' => now(),
                     ]
                 );
+                $extraUser->forceFill(['email_verified_at' => now()])->save();
                 $extraUser->roles()->syncWithoutDetaching([Role::where('name', 'super-admin')->value('id')]);
 
                 $hospitalAdmin = User::updateOrCreate(
@@ -83,6 +85,7 @@ class DemoDataSeeder extends Seeder
                         'last_activity_at' => now(),
                     ]
                 );
+                $hospitalAdmin->forceFill(['email_verified_at' => now()])->save();
                 $hospitalAdmin->roles()->syncWithoutDetaching([Role::where('name', 'super-admin')->value('id')]);
             }
 

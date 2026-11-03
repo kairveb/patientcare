@@ -24,6 +24,7 @@ class WorkflowControlsVisibilityTest extends TestCase
 
     public function test_appointment_controls_are_only_rendered_for_registration_and_super_admin(): void
     {
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
 
         $patient = Patient::query()->firstOrFail();
@@ -57,9 +58,10 @@ class WorkflowControlsVisibilityTest extends TestCase
         }
 
         $patientUser = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patientUser->patient, $patientUser);
         $this->actingAs($patientUser)->get('/patient-portal/appointments')
             ->assertOk()
-            ->assertSee('Book appointment')
+            ->assertSee('Find a doctor')
             ->assertDontSee('Check In')
             ->assertSee('Cancel appointment')
             ->assertSee('Reschedule');

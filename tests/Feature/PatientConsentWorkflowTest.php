@@ -29,6 +29,8 @@ class PatientConsentWorkflowTest extends TestCase
     {
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $patientUser, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $patientUser, 'self');
         $url = '/api/v1/me/consents';
 
         $this->actingAs($patientUser)->getJson($url)
@@ -51,7 +53,7 @@ class PatientConsentWorkflowTest extends TestCase
         $this->assertSame(2, $patient->consents()->where('type', 'AI_ASSISTED')->count());
         $this->assertFalse(app(PatientConsentService::class)->hasCurrentGrant($patient, 'AI_ASSISTED'));
         $this->assertSame(1, $patient->consents()->where('type', 'AI_ASSISTED')->where('granted', false)->count());
-        $this->assertSame(2, \App\Models\AuditLog::where('action', 'RECORD_PATIENT_CONSENT')->count());
+        $this->assertSame(4, \App\Models\AuditLog::where('action', 'RECORD_PATIENT_CONSENT')->count());
 
         config(['consents.types.AI_ASSISTED.version' => '2.0']);
         $this->actingAs($patientUser)->postJson($url, [
@@ -113,8 +115,11 @@ class PatientConsentWorkflowTest extends TestCase
 
     public function test_ai_tools_and_telehealth_join_require_current_consent(): void
     {
+        config(['telehealth.provider' => 'jitsi_demo']);
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        app(PatientConsentService::class)->record($patient, 'DATA_PRIVACY', true, $patientUser, 'self');
+        app(PatientConsentService::class)->record($patient, 'TERMS_OF_USE', true, $patientUser, 'self');
         $session = $this->telehealthSession($patient);
 
         $this->actingAs($patientUser)

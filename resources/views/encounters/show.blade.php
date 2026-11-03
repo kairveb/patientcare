@@ -81,6 +81,56 @@
         </div>
     </div>
 
+    @can('create', [\App\Models\CareRequest::class, $encounter])
+        <section class="rounded-xl border border-slate-200 bg-white p-6">
+            <h3 class="font-semibold text-slate-800">Outpatient approval request</h3>
+            <p class="mt-1 text-sm text-slate-500">Request approval for a lab, imaging service, or procedure.</p>
+            <form method="POST" action="{{ route('encounters.care-requests.store', $encounter) }}" class="mt-4 space-y-4">
+                @csrf
+                <div class="grid gap-4 md:grid-cols-2">
+                    <label class="block text-sm font-medium text-slate-700">Service type
+                        <select name="type" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                            <option value="">Choose a type</option>
+                            <option value="lab" @selected(old('type') === 'lab')>Laboratory</option>
+                            <option value="imaging" @selected(old('type') === 'imaging')>Imaging</option>
+                            <option value="procedure" @selected(old('type') === 'procedure')>Procedure</option>
+                        </select>
+                    </label>
+                    <label class="block text-sm font-medium text-slate-700">Urgency
+                        <select name="urgency" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                            <option value="routine" @selected(old('urgency', 'routine') === 'routine')>Routine</option>
+                            <option value="urgent" @selected(old('urgency') === 'urgent')>Urgent</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="block text-sm font-medium text-slate-700">Requested service and clinical reason
+                    <textarea name="description" required minlength="3" maxlength="5000" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">{{ old('description') }}</textarea>
+                </label>
+                <button type="submit" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Submit for approval</button>
+            </form>
+        </section>
+    @endcan
+
+    @if ($encounter->careRequests->isNotEmpty())
+        <section class="rounded-xl border border-slate-200 bg-white p-6">
+            <h3 class="font-semibold text-slate-800">Outpatient approval requests</h3>
+            <div class="mt-3 divide-y divide-slate-100">
+                @foreach ($encounter->careRequests as $careRequest)
+                    <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+                        <div>
+                            <p class="font-medium text-slate-800">{{ ucfirst($careRequest->type) }} · {{ $careRequest->status }}</p>
+                            <p class="text-sm text-slate-600">{{ $careRequest->description }}</p>
+                            @if ($careRequest->approval_reference)
+                                <p class="text-xs text-slate-500">Reference: {{ $careRequest->approval_reference }}</p>
+                            @endif
+                        </div>
+                        <a href="{{ route('care-requests.show', $careRequest) }}" class="text-sm font-medium text-teal-700 hover:underline">View request</a>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     @if ($encounter->discharge_instructions || $encounter->follow_up_date)
     <div class="bg-white rounded-xl border border-slate-200 p-6">
         <h3 class="font-semibold text-slate-800 mb-3">Discharge & follow-up</h3>
@@ -100,6 +150,25 @@
         </div>
     </div>
     @endif
+
+    @can('update', $encounter)
+        @if (auth()->user()->hasRole('doctor'))
+            <section class="rounded-xl border border-blue-200 bg-blue-50 p-6">
+                <h3 class="font-semibold text-blue-950">Recommend a follow-up appointment</h3>
+                <p class="mt-1 text-sm text-blue-900">The suggested date is saved with this encounter. The patient can select a real open slot on your calendar.</p>
+                <form method="POST" action="{{ route('encounters.follow-up', $encounter) }}" class="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
+                    @csrf
+                    <label class="text-sm font-medium text-slate-700">Suggested date
+                        <input type="date" name="follow_up_date" required min="{{ today()->toDateString() }}" value="{{ old('follow_up_date', $encounter->follow_up_date?->toDateString()) }}" class="mt-1 block w-full rounded-lg border-slate-300">
+                    </label>
+                    <label class="text-sm font-medium text-slate-700">Patient-facing note (optional)
+                        <input type="text" name="recommendation" maxlength="1000" class="mt-1 block w-full rounded-lg border-slate-300">
+                    </label>
+                    <button class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white">Send recommendation</button>
+                </form>
+            </section>
+        @endif
+    @endcan
 
     @if ($encounter->notes->isNotEmpty())
     <div class="bg-white rounded-xl border border-slate-200 p-6">

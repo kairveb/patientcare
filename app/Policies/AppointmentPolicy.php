@@ -41,7 +41,8 @@ class AppointmentPolicy
 
     public function scopeQuery(User $user, Builder $query): Builder
     {
-        if ($user->isSuperAdmin() || $user->hasRole('registration')) {
+        if ($user->isSuperAdmin() || $user->hasRole('registration')
+            || ($user->hasRole('admin') && $user->hasPermission('view-appointments'))) {
             return $query;
         }
 
@@ -75,13 +76,21 @@ class AppointmentPolicy
     public function create(User $user): bool
     {
         return $user->isSuperAdmin()
+            || ($user->hasRole('admin') && $user->hasPermission('create-appointments'))
             || $user->hasRole('registration')
+            || ($user->hasRole('nurse') && $user->hasPermission('view-appointments'))
             || ($user->isPatient() && $user->patient()->exists());
     }
 
     public function book(User $user): bool
     {
         return $this->create($user);
+    }
+
+    public function decide(User $user, Appointment $appointment): bool
+    {
+        return $appointment->status === Appointment::STATUS_PENDING
+            && $user->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']);
     }
 
     public function update(User $user, Appointment $appointment): bool
@@ -103,7 +112,9 @@ class AppointmentPolicy
 
     public function manageLifecycle(User $user, Appointment $appointment): bool
     {
-        return $user->isSuperAdmin() || $user->hasRole('registration');
+        return $user->isSuperAdmin()
+            || $user->hasRole('registration')
+            || ($user->hasRole('admin') && $user->hasPermission('cancel-appointments'));
     }
 
     public function delete(User $user, Appointment $appointment): bool

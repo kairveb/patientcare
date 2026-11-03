@@ -81,14 +81,13 @@ class TelehealthMeetingAccessTest extends TestCase
         $patientUser = $this->userWithRole('patient');
         $patient->update(['user_id' => $patientUser->id]);
         app(PatientConsentService::class)->record($patient, 'TELEHEALTH', true, $doctor, 'staff');
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         $patientData = $this->actingAs($patientUser)
             ->getJson('/api/v1/telehealth/'.$session->id)
             ->assertOk()
             ->json('data');
-        $this->assertSame(route('telehealth.join', [
-            'session' => $session,
-            'token' => $session->secureJoinToken(),
-        ]), $patientData['join_url']);
+        $this->assertSame(route('telehealth.join', ['session' => $session]), $patientData['join_url']);
+        $this->assertStringNotContainsString('?token=', $patientData['join_url']);
         $this->assertArrayNotHasKey('host_start_url', $patientData);
         $this->assertArrayNotHasKey('zoom_meeting_id', $patientData);
     }
@@ -141,10 +140,11 @@ class TelehealthMeetingAccessTest extends TestCase
             && $request->hasHeader('Authorization', 'Bearer fake-access-token'));
     }
 
-    public function test_missing_zoom_configuration_uses_protected_local_room_without_http_calls(): void
+    public function test_missing_zoom_configuration_uses_demo_provider_without_http_calls(): void
     {
         [, , $appointment] = $this->makeSession();
         config([
+            'telehealth.provider' => 'jitsi_demo',
             'services.zoom.enabled' => true,
             'services.zoom.account_id' => null,
             'services.zoom.client_id' => null,
@@ -158,19 +158,44 @@ class TelehealthMeetingAccessTest extends TestCase
             'appointment_id' => $appointment->id,
         ]);
         $response->assertCreated()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Telehealth session created with a protected local room because a Zoom meeting is unavailable.');
+            ->assertJsonPath('success', true);
         $session = TelehealthSession::findOrFail($response->json('data.id'));
 
         $this->assertSame(TelehealthSession::STATUS_SCHEDULED, $session->status);
-        $this->assertStringContainsString('/telehealth/'.$session->id.'/join?token=', $session->join_url);
-        $this->assertSame($session->join_url, $session->host_start_url);
+        $this->assertNull($session->join_url);
+        $this->assertNull($session->host_start_url);
+        $this->assertSame('jitsi_demo', app(\App\Services\TelehealthService::class)->providerName());
         Http::assertNothingSent();
     }
 
-    public function test_zoom_api_failure_falls_back_and_never_logs_sensitive_response_content(): void
+    public function test_missing_zoom_and_unset_provider_fail_closed_for_session_creation_and_join(): void
     {
-        [, , $appointment] = $this->makeSession();
+        [$doctor, , $appointment, $session] = $this->makeSession();
+        config([
+            'telehealth.provider' => null,
+            'services.zoom.enabled' => false,
+            'services.zoom.account_id' => null,
+            'services.zoom.client_id' => null,
+            'services.zoom.client_secret' => null,
+        ]);
+        app()->forgetInstance(ZoomService::class);
+        app(PatientConsentService::class)->record($appointment->patient, 'TELEHEALTH', true, $doctor, 'staff');
+        $existingSessions = TelehealthSession::count();
+
+        $this->actingAs($doctor)->postJson('/api/v1/telehealth', [
+            'appointment_id' => $appointment->id,
+        ])->assertServiceUnavailable()
+            ->assertJsonPath('success', false);
+        $this->assertSame($existingSessions, TelehealthSession::count());
+
+        $this->actingAs($doctor)->getJson(route('telehealth.join', $session))
+            ->assertStatus(503);
+    }
+
+    public function test_zoom_api_failure_does_not_downgrade_to_demo_and_never_logs_sensitive_response_content(): void
+    {
+        [, , $appointment, $session] = $this->makeSession();
+        $session->delete();
         $this->configureZoom();
         $secretFragments = [
             'fake-access-token',
@@ -193,15 +218,14 @@ class TelehealthMeetingAccessTest extends TestCase
         $response = $this->actingAs($superAdmin)->postJson('/api/v1/telehealth', [
             'appointment_id' => $appointment->id,
         ]);
-        $response->assertCreated()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('integration.status', 'FALLBACK_LOCAL');
-        $session = TelehealthSession::findOrFail($response->json('data.id'));
+        $response->assertServiceUnavailable()
+            ->assertJsonPath('success', false);
+        $session = TelehealthSession::where('appointment_id', $appointment->id)->firstOrFail();
 
-        $this->assertSame(TelehealthSession::STATUS_SCHEDULED, $session->status);
+        $this->assertSame(TelehealthSession::STATUS_NOT_CONFIGURED, $session->status);
         $this->assertNull($session->zoom_meeting_id);
-        $this->assertStringContainsString('/telehealth/'.$session->id.'/join?token=', $session->join_url);
-        $this->assertDatabaseHas('telehealth_sessions', ['id' => $session->id, 'status' => TelehealthSession::STATUS_SCHEDULED]);
+        $this->assertNull($session->join_url);
+        $this->assertDatabaseHas('telehealth_sessions', ['id' => $session->id, 'status' => TelehealthSession::STATUS_NOT_CONFIGURED]);
         $metadata = json_encode(IntegrationLog::where('integration', 'zoom')->get()->pluck('metadata')->all());
         foreach ($secretFragments as $secret) {
             $this->assertStringNotContainsString($secret, $metadata);
@@ -212,6 +236,7 @@ class TelehealthMeetingAccessTest extends TestCase
     private function configureZoom(): void
     {
         config([
+            'telehealth.provider' => 'zoom',
             'services.zoom.enabled' => true,
             'services.zoom.account_id' => 'fake-account-id',
             'services.zoom.client_id' => 'fake-client-id',

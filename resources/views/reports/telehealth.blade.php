@@ -9,6 +9,8 @@
         <a href="{{ route('reports.index') }}" class="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50">Back</a>
     </div>
 
+    @include('reports._date-form', ['start' => request('start', today()->subDays(30)->toDateString()), 'end' => request('end', today()->toDateString())])
+    @include('reports._export-links', ['report' => 'telehealth'])
     <div class="bg-white rounded-xl border border-slate-200 p-5">
         <div class="text-sm text-slate-500 mb-2">By Status</div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">

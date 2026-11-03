@@ -3,8 +3,10 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Appointment;
+use App\Models\AppointmentSlot;
 use App\Models\Patient;
 use App\Models\Permission;
+use App\Models\Provider;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\HimsSeeder;
@@ -38,6 +40,7 @@ class AppointmentLifecycleAuthorizationTest extends TestCase
         foreach ([$doctor, $nurse, $patientUser] as $user) {
             $user->roles()->each(fn (Role $role) => $role->permissions()->syncWithoutDetaching($lifecyclePermissions));
         }
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
 
         foreach ([$doctor, $nurse] as $user) {
             $token = $user->createToken('appointment-lifecycle-test')->plainTextToken;
@@ -65,8 +68,16 @@ class AppointmentLifecycleAuthorizationTest extends TestCase
             ->assertForbidden();
         $this->postJson("/api/v1/appointments/{$appointment->id}/check-in")
             ->assertForbidden();
+        $rescheduleStartsAt = now()->addDays(2)->setTime(10, 0);
+        $rescheduleSlot = AppointmentSlot::create([
+            'provider_id' => $provider->id,
+            'starts_at' => $rescheduleStartsAt,
+            'ends_at' => $rescheduleStartsAt->copy()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_AVAILABLE,
+        ]);
         $this->postJson("/api/v1/appointments/{$appointment->id}/reschedule", [
-            'starts_at' => now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
+            'starts_at' => $rescheduleStartsAt->toDateTimeString(),
+            'appointment_slot_id' => $rescheduleSlot->id,
         ])->assertOk();
         $this->postJson("/api/v1/appointments/{$appointment->id}/cancel")
             ->assertOk();
@@ -109,7 +120,19 @@ class AppointmentLifecycleAuthorizationTest extends TestCase
         $token = $registration->createToken('appointment-lifecycle-test')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->patchJson("/api/v1/appointments/{$appointment->id}", ['status' => Appointment::STATUS_CONFIRMED])
+            ->patchJson("/api/v1/appointments/{$appointment->id}", [
+                'status' => Appointment::STATUS_CONFIRMED,
+                'reason' => 'Registration verified the booking.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('decision');
+        $this->assertSame(Appointment::STATUS_PENDING, $appointment->fresh()->status);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/v1/appointments/{$appointment->id}/decision", [
+                'decision' => 'confirm',
+                'reason' => 'Registration verified the booking.',
+            ])
             ->assertOk();
 
         $this->assertSame(Appointment::STATUS_CONFIRMED, $appointment->fresh()->status);
@@ -122,5 +145,33 @@ class AppointmentLifecycleAuthorizationTest extends TestCase
             ->assertOk();
 
         $this->assertSame(Appointment::STATUS_CHECKED_IN, $appointment->fresh()->status);
+    }
+
+    public function test_api_no_show_uses_authorized_service_transition(): void
+    {
+        $this->seed(HimsSeeder::class);
+        $patient = Patient::query()->firstOrFail();
+        $provider = Provider::query()->firstOrFail();
+        $appointment = Appointment::create([
+            'appointment_number' => 'APT-NOSHOW-'.uniqid(),
+            'patient_id' => $patient->id,
+            'provider_id' => $provider->id,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->subMinutes(30),
+            'status' => Appointment::STATUS_CONFIRMED,
+        ]);
+
+        $doctor = User::whereHas('roles', fn ($query) => $query->where('name', 'doctor'))->firstOrFail();
+        $this->actingAs($doctor, 'sanctum')
+            ->postJson("/api/v1/appointments/{$appointment->id}/no-show")
+            ->assertForbidden();
+        $this->assertSame(Appointment::STATUS_CONFIRMED, $appointment->fresh()->status);
+
+        $registration = User::whereHas('roles', fn ($query) => $query->where('name', 'registration'))->firstOrFail();
+        $this->actingAs($registration, 'sanctum')
+            ->postJson("/api/v1/appointments/{$appointment->id}/no-show")
+            ->assertOk()
+            ->assertJsonPath('data.status', Appointment::STATUS_NO_SHOW);
+        $this->assertSame(Appointment::STATUS_NO_SHOW, $appointment->fresh()->status);
     }
 }

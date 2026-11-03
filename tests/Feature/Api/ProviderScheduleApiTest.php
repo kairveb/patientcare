@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Provider;
 use App\Models\Patient;
+use App\Models\AppointmentSlot;
 use App\Models\ProviderSchedule;
 use App\Models\Role;
 use App\Models\User;
@@ -46,9 +47,11 @@ class ProviderScheduleApiTest extends TestCase
     {
         $provider = Provider::query()->firstOrFail();
         $schedule = ProviderSchedule::query()->firstOrFail();
+        $patientUser = User::where('email', 'patient@coor.test')->firstOrFail();
+        $this->acceptRequiredPrivacyDocuments($patientUser->patient()->firstOrFail(), $patientUser);
 
-        foreach (['registration@coor.test', 'patient@coor.test'] as $email) {
-            Sanctum::actingAs(User::where('email', $email)->firstOrFail());
+        foreach ([User::where('email', 'registration@coor.test')->firstOrFail(), $patientUser] as $user) {
+            Sanctum::actingAs($user);
 
             $this->getJson('/api/v1/provider-schedules')->assertOk();
             $this->postJson('/api/v1/provider-schedules', [
@@ -134,15 +137,25 @@ class ProviderScheduleApiTest extends TestCase
             [$patientUser, $patientUser->patient()->firstOrFail()],
             [$registration, Patient::whereNull('user_id')->firstOrFail()],
         ];
+        $this->acceptRequiredPrivacyDocuments($bookingPatients[0][1], $patientUser);
 
         foreach ($bookingPatients as $index => [$user, $patient]) {
             Sanctum::actingAs($user);
+            $startsAt = now()->addDays(20 + $index)->setTime(10, 0);
+            $slot = AppointmentSlot::create([
+                'provider_id' => $provider->id,
+                'appointment_type_id' => $appointmentTypeId,
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->copy()->addMinutes(30),
+                'status' => AppointmentSlot::STATUS_AVAILABLE,
+            ]);
             $response = $this->postJson('/api/v1/appointments', [
                 'patient_id' => $patient->id,
                 'provider_id' => $provider->id,
                 'department_id' => $provider->department_id,
                 'appointment_type_id' => $appointmentTypeId,
-                'starts_at' => now()->addDays(20 + $index)->setTime(10, 0)->toDateTimeString(),
+                'starts_at' => $startsAt->toDateTimeString(),
+                'appointment_slot_id' => $slot->id,
                 'duration' => 30,
             ]);
 

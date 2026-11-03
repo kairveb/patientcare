@@ -14,7 +14,10 @@ class Provider extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['active' => 'boolean'];
+    protected $casts = [
+        'active' => 'boolean',
+        'accepts_virtual' => 'boolean',
+    ];
 
     public function user(): BelongsTo
     {
@@ -54,5 +57,10 @@ class Provider extends Model
     public function appointmentSlots(): HasMany
     {
         return $this->hasMany(AppointmentSlot::class);
+    }
+
+    public function unavailabilities(): HasMany
+    {
+        return $this->hasMany(ProviderUnavailability::class);
     }
 }

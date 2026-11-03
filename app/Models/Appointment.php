@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class Appointment extends Model
 {
@@ -33,7 +34,38 @@ class Appointment extends Model
 
     public const STATUS_CANCELLED = 'CANCELLED';
 
+    public const STATUS_REJECTED = 'REJECTED';
+
     public const STATUS_NO_SHOW = 'NO-SHOW';
+
+    protected static function booted(): void
+    {
+        static::saving(function (Appointment $appointment): void {
+            if (in_array($appointment->status, [self::STATUS_CANCELLED, self::STATUS_REJECTED, self::STATUS_NO_SHOW], true)) {
+                $appointment->active_slot_key = null;
+
+                return;
+            }
+
+            if ($appointment->provider_id && $appointment->starts_at) {
+                $startsAt = $appointment->starts_at instanceof Carbon
+                    ? $appointment->starts_at
+                    : Carbon::parse($appointment->starts_at);
+
+                $appointment->active_slot_key = self::makeActiveSlotKey(
+                    (int) $appointment->provider_id,
+                    $startsAt
+                );
+            }
+        });
+    }
+
+    public static function makeActiveSlotKey(int $providerId, Carbon|string $startsAt): string
+    {
+        $startsAt = $startsAt instanceof Carbon ? $startsAt : Carbon::parse($startsAt);
+
+        return $providerId.':'.$startsAt->format('Y-m-d H:i:s');
+    }
 
     public function patient(): BelongsTo
     {
@@ -60,6 +92,16 @@ class Appointment extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function parentAppointment(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_appointment_id');
+    }
+
+    public function followUpAppointments(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_appointment_id');
+    }
+
     public function encounter(): HasOne
     {
         return $this->hasOne(Encounter::class);
@@ -73,6 +115,11 @@ class Appointment extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(AppointmentStatusHistory::class);
+    }
+
+    public function reassignments(): HasMany
+    {
+        return $this->hasMany(AppointmentReassignment::class);
     }
 
     public function vitals(): HasOne

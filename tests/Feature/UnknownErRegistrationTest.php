@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AppointmentType;
+use App\Models\AppointmentSlot;
 use App\Models\AuditLog;
 use App\Models\ErVisit;
 use App\Models\Patient;
@@ -129,12 +130,21 @@ class UnknownErRegistrationTest extends TestCase
         ]);
         $provider = Provider::factory()->create();
         $appointmentType = AppointmentType::query()->firstOrFail();
+        $startsAt = now()->addDays(2)->setTime(10, 0);
+        $slot = AppointmentSlot::create([
+            'provider_id' => $provider->id,
+            'appointment_type_id' => $appointmentType->id,
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->copy()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_AVAILABLE,
+        ]);
 
         $this->actingAs($registration)->postJson('/api/v1/appointments', [
             'patient_id' => $patient->id,
             'provider_id' => $provider->id,
             'appointment_type_id' => $appointmentType->id,
-            'starts_at' => now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
+            'starts_at' => $startsAt->toDateTimeString(),
+            'appointment_slot_id' => $slot->id,
             'duration' => 30,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('patient_id');

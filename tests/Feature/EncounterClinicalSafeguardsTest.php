@@ -20,6 +20,7 @@ class EncounterClinicalSafeguardsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
     }
 
@@ -175,6 +176,9 @@ class EncounterClinicalSafeguardsTest extends TestCase
 
         foreach (['nurse@coor.test', 'registration@coor.test', 'patient@coor.test'] as $email) {
             $user = User::where('email', $email)->firstOrFail();
+            if ($email === 'patient@coor.test') {
+                $this->acceptRequiredPrivacyDocuments($user->patient, $user);
+            }
             $encounter = $this->createOpenEncounter($doctor);
 
             $this->actingAs($user)->post(route('encounters.complete', $encounter), $documentation)

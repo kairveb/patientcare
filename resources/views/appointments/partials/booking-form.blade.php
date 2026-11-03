@@ -1,4 +1,4 @@
-<form id="appointment-booking-form" method="POST" action="{{ route('appointments.store') }}" class="space-y-4" onsubmit="return false;">
+<form id="appointment-booking-form" method="POST" action="{{ route('appointments.store') }}" class="space-y-4" onsubmit="return false;" data-appointment-slot-picker data-slots-url="{{ route('appointments.slots') }}">
     @csrf
 
     <div id="booking-modal-alert" class="hidden rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></div>
@@ -35,7 +35,7 @@
 
     <div>
         <label class="mb-1 block text-sm font-medium text-slate-700">Provider *</label>
-        <select name="provider_id" id="provider" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+        <select name="provider_id" data-slot-provider required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="">Select provider</option>
             @foreach ($providers as $provider)
                 <option value="{{ $provider->id }}">{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
@@ -45,12 +45,13 @@
 
     <div>
         <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Date *</label>
-        <input type="date" name="appointment_date" id="appointment_date" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+        <input type="date" name="appointment_date" data-slot-date required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
     </div>
 
-    <div id="slots-container">
+    <div data-slot-results>
         {{-- Available slots loaded via AJAX --}}
     </div>
+    <input type="hidden" name="starts_at" value="">
 
     <div>
         <label class="mb-1 block text-sm font-medium text-slate-700">Reason / Notes</label>
@@ -62,59 +63,3 @@
         <button type="submit" class="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700">Book Appointment</button>
     </div>
 </form>
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const providerSelect = document.getElementById('provider');
-    const dateInput = document.getElementById('appointment_date');
-    const slotsContainer = document.getElementById('slots-container');
-
-    if (!providerSelect || !dateInput || !slotsContainer) {
-        return;
-    }
-
-    function loadSlots() {
-        const providerId = providerSelect.value;
-        const date = dateInput.value;
-        if (!providerId || !date) {
-            slotsContainer.innerHTML = '';
-            return;
-        }
-
-        fetch(`/appointments/slots/json?provider_id=${providerId}&date=${date}`, {
-            headers: {
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (!data.data || data.data.length === 0) {
-                slotsContainer.innerHTML = '<p class="mt-2 text-sm text-slate-400">No available slots for this provider on the selected date.</p>';
-                return;
-            }
-
-            let html = '<label class="mb-2 block text-sm font-medium text-slate-700">Available Slots</label><div class="grid grid-cols-3 gap-2 md:grid-cols-4">';
-            data.data.forEach(slot => {
-                const time = new Date(slot.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                html += `
-                    <label class="cursor-pointer rounded-lg border border-slate-200 p-2 text-center text-sm hover:border-teal-500">
-                        <input type="radio" name="starts_at" value="${slot.starts_at}" class="sr-only peer">
-                        <span class="peer-checked:font-semibold peer-checked:text-teal-600">${time}</span>
-                    </label>
-                `;
-            });
-            html += '</div>';
-            slotsContainer.innerHTML = html;
-        })
-        .catch(() => {
-            slotsContainer.innerHTML = '<p class="mt-2 text-sm text-red-500">Could not load slots.</p>';
-        });
-    }
-
-    providerSelect.addEventListener('change', loadSlots);
-    dateInput.addEventListener('change', loadSlots);
-});
-</script>
-@endpush

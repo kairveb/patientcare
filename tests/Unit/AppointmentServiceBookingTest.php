@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Appointment;
+use App\Models\AppointmentSlot;
 use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Provider;
@@ -26,8 +27,14 @@ class AppointmentServiceBookingTest extends TestCase
         $telehealth = Mockery::mock(TelehealthService::class);
         $queueDisplay = Mockery::mock(QueueDisplayService::class);
 
+        $scheduling->shouldReceive('lockProvider')->once()->andReturn(new Provider());
         $scheduling->shouldReceive('providerHasConflict')->once()->andReturn(false);
-        $scheduling->shouldReceive('claimSlot')->never();
+        $scheduling->shouldReceive('reserveSlot')->once()->andReturn(new AppointmentSlot([
+            'provider_id' => 1,
+            'starts_at' => Carbon::now()->addHour(),
+            'ends_at' => Carbon::now()->addHour()->addMinutes(30),
+            'status' => AppointmentSlot::STATUS_BOOKED,
+        ]));
         $audit->shouldReceive('createAppointment')->once()->andReturnUsing(fn ($id, $meta) => new AuditLog([
             'user_id' => null,
             'action' => 'CREATE_APPOINTMENT',
@@ -65,6 +72,7 @@ class AppointmentServiceBookingTest extends TestCase
             'patient_id' => $patient->id,
             'provider_id' => $provider->id,
             'starts_at' => Carbon::now()->addHour()->toDateTimeString(),
+            'appointment_slot_id' => 1,
             'duration' => 30,
             'reason' => 'Follow-up',
         ], $user->id);
@@ -96,7 +104,15 @@ class AppointmentServiceBookingTest extends TestCase
         $telehealth = Mockery::mock(TelehealthService::class);
         $queueDisplay = Mockery::mock(QueueDisplayService::class);
 
+        $scheduling->shouldReceive('lockProvider')->once()->andReturn(new Provider());
         $scheduling->shouldReceive('providerHasConflict')->once()->andReturn(false);
+        $scheduling->shouldReceive('providerIsUnavailable')->once()->andReturn(false);
+        $scheduling->shouldReceive('reserveSlot')->once()->andReturn(new AppointmentSlot([
+            'provider_id' => 1,
+            'starts_at' => Carbon::now()->addDays(2)->setTime(10, 0),
+            'ends_at' => Carbon::now()->addDays(2)->setTime(10, 30),
+            'status' => AppointmentSlot::STATUS_BOOKED,
+        ]));
         $audit->shouldReceive('rescheduleAppointment')->once()->withArgs(fn ($id) => (int) $id > 0);
         $telehealth->shouldReceive('createSession')->never();
 
@@ -136,6 +152,7 @@ class AppointmentServiceBookingTest extends TestCase
 
         $updated = $service->reschedule($appointment, [
             'starts_at' => Carbon::now()->addDays(2)->setTime(10, 0)->toDateTimeString(),
+            'appointment_slot_id' => 1,
             'duration' => '30',
         ], $user->id);
 

@@ -14,6 +14,13 @@
                 <p class="text-sm text-slate-600">Appointment and Scheduling System (ASS)</p>
             </div>
             <div class="flex items-center gap-2">
+                @if (auth()->user()->hasRole('patient'))
+                    <a href="{{ route('doctors.index') }}" class="rounded-2xl border border-teal-600 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">Find a doctor</a>
+                @endif
+                @if (auth()->user()->hasAnyRole(['registration', 'nurse', 'admin', 'super-admin']))
+                    <a href="{{ route('providers.profiles') }}" class="rounded-2xl border border-teal-600 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">Doctor profiles</a>
+                    <a href="{{ route('appointments.approvals') }}" class="rounded-2xl border border-sky-600 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50">Approval queue</a>
+                @endif
                 @if (request()->hasAny(['q', 'date', 'status', 'follow_up']))
                     <a href="{{ route('appointments.index') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Clear filters</a>
                 @endif
@@ -77,6 +84,7 @@
                             </div>
                         </th>
                         <th class="text-left align-top">Type</th>
+                        <th class="text-left align-top">Source</th>
                         <th class="relative text-left align-top">
                             <div class="flex items-center gap-2">
                                 <span>Status</span>
@@ -119,6 +127,7 @@
                             <td>{{ $apt->provider->full_name ?? '—' }}</td>
                             <td>{{ $apt->starts_at->format('M d, Y g:i A') }}</td>
                             <td>{{ $apt->appointmentType->name ?? '—' }}</td>
+                            <td class="text-xs">{{ str_replace('_', ' ', $apt->booking_source) }}</td>
                             <td>
                                 @include('partials.status-badge', ['label' => $apt->status, 'variant' => App\Support\QueueStatus::appointmentVariant($apt->status)])
                             </td>
@@ -132,7 +141,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="py-10 text-center text-slate-500">No appointments scheduled yet.</td></tr>
+                        <tr><td colspan="8" class="py-10 text-center text-slate-500">No appointments scheduled yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -538,6 +547,7 @@
                     if (slotsContainer) {
                         slotsContainer.innerHTML = '';
                     }
+                    bookingModalBody.querySelector('[name="starts_at"]').value = '';
                     bookingModalBody.querySelector('#booking-modal-alert')?.classList.add('hidden');
                     bootstrap.Modal.getOrCreateInstance(bookingModalEl).hide();
                     window.HimsComponents?.notify({ tone: 'success', message: payload?.message || 'Appointment booked successfully.' });

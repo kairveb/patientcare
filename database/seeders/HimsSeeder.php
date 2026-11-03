@@ -11,6 +11,8 @@ class HimsSeeder extends Seeder
         $this->call([
             ReferenceDataSeeder::class,
             RbacReconciliationSeeder::class,
+            AdminRoleSeeder::class,
+            CareRequestRbacSeeder::class,
             DemoDataSeeder::class,
         ]);
     }

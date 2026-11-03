@@ -36,20 +36,18 @@ class RbacReconciliationSeeder extends Seeder
             ->each(fn (Role $role) => $role->permissions()->detach($manageProviderSchedulesId));
 
         $this->reconcileRole('registration', [
-            'view-beds', 'view-admissions', 'assign-beds',
+            'view-beds', 'view-admissions', 'assign-beds', 'view-reports',
             'view-opd-queue', 'manage-opd-queue',
-        ], [
-            'view-reports',
         ]);
 
         $this->reconcileRole('doctor', [
-            'order-discharges', 'view-opd-queue', 'manage-opd-queue', 'view-payment-status',
+            'order-discharges', 'view-opd-queue', 'manage-opd-queue', 'view-payment-status', 'view-reports',
         ], [
-            'update-patients', 'update-appointments', 'discharge-patients', 'view-billing', 'view-reports',
+            'update-patients', 'update-appointments', 'discharge-patients', 'view-billing',
         ]);
 
         $this->reconcileRole('nurse', [
-            'execute-discharges', 'update-bed-status', 'view-payment-status', 'view-opd-queue',
+            'execute-discharges', 'update-bed-status', 'view-payment-status', 'view-opd-queue', 'view-reports',
         ], [
             'discharge-patients', 'create-admissions', 'manage-admissions',
             'manage-wards', 'manage-beds', 'update-patients', 'view-billing', 'manage-opd-queue',

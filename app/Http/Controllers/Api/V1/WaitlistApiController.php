@@ -62,11 +62,12 @@ class WaitlistApiController extends Controller
             'department_id' => ['nullable', 'exists:departments,id'],
             'appointment_type_id' => ['nullable', 'exists:appointment_types,id'],
             'preferred_date' => ['nullable', 'date'],
-            'status' => ['nullable', 'in:WAITING,OFFERED,BOOKED,REMOVED'],
+            'status' => ['sometimes', 'in:WAITING'],
         ]);
 
         $patient = Patient::findOrFail($data['patient_id']);
         abort_unless($request->user()->can('create', [Waitlist::class, $patient]), 403, 'You are not authorized.');
+        $data['status'] = Waitlist::STATUS_WAITING;
 
         $waitlist = $this->appointmentService->addToWaitlist($data);
 
@@ -82,12 +83,30 @@ class WaitlistApiController extends Controller
         $waitlist = Waitlist::findOrFail($id);
         abort_unless($request->user()->can('update', $waitlist), 403, 'You are not authorized.');
 
+        if ($request->user()->isPatient()) {
+            $data = $request->validate([
+                'status' => ['required', 'in:REMOVED'],
+            ]);
+            $waitlist->update($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Waitlist entry cancelled successfully.',
+                'data' => $waitlist,
+            ]);
+        }
+
+        if ($request->exists('status')) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'status' => 'Waitlist status is managed by the system.',
+            ]);
+        }
+
         $data = $request->validate([
             'provider_id' => ['nullable', 'exists:providers,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'appointment_type_id' => ['nullable', 'exists:appointment_types,id'],
             'preferred_date' => ['nullable', 'date'],
-            'status' => ['nullable', 'in:WAITING,OFFERED,BOOKED,REMOVED'],
         ]);
 
         $waitlist->update($data);

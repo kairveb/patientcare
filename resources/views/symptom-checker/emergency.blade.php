@@ -12,13 +12,17 @@
     </section>
 
     <section class="rounded-xl border border-slate-200 bg-white p-6">
+        <p class="text-sm font-semibold text-red-800">AI-assisted suggestion. Final decision belongs to a healthcare professional.</p>
         <h2 class="font-semibold text-slate-800">Reasons for diversion</h2>
         <ul class="mt-2 list-inside list-disc space-y-1 text-sm text-slate-700">
             @foreach ($symptomCheck->ai_reasons ?? [] as $reason)
                 <li>{{ $reason }}</li>
             @endforeach
         </ul>
-        <p class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">AI decision support only, not a diagnosis. The OPD/Virtual/ER mapping is for clinical validation; a licensed clinician makes the final decision.</p>
+        @foreach ($symptomCheck->ai_result['advice'] ?? [] as $advice)
+            <p class="mt-2 text-sm text-slate-700">{{ $advice }}</p>
+        @endforeach
+        <p class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This is not a medical diagnosis.</p>
     </section>
 </div>
 @endsection

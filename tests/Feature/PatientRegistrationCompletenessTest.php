@@ -86,6 +86,7 @@ class PatientRegistrationCompletenessTest extends TestCase
 
         $patientUser = $this->userWithRole('patient');
         $portalPatient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($portalPatient, $patientUser);
         $this->actingAs($patientUser)->post(route('patients.profile.save'), [
             'first_name' => $portalPatient->first_name,
             'last_name' => $portalPatient->last_name,
@@ -154,6 +155,7 @@ class PatientRegistrationCompletenessTest extends TestCase
     {
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
         $address = PatientAddress::create([
             'patient_id' => $patient->id,
             'line1' => '12 Legacy Street',
@@ -221,6 +223,7 @@ class PatientRegistrationCompletenessTest extends TestCase
         Storage::fake('local');
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
 
         $documentId = $this->actingAs($patientUser)->postJson('/api/v1/me/identity-documents', [
             'identifier_type' => 'senior_id_number',

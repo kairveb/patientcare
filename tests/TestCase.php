@@ -2,6 +2,9 @@
 
 namespace Tests;
 
+use App\Models\Patient;
+use App\Models\User;
+use App\Services\PatientConsentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
@@ -28,6 +31,16 @@ abstract class TestCase extends BaseTestCase
         }
 
         $this->refreshDatabaseUsingTrait();
+    }
+
+    protected function acceptRequiredPrivacyDocuments(Patient $patient, User $user): void
+    {
+        $consents = app(PatientConsentService::class);
+        foreach (['DATA_PRIVACY', 'TERMS_OF_USE'] as $type) {
+            if (! $consents->hasCurrentGrant($patient, $type)) {
+                $consents->record($patient, $type, true, $user, 'self');
+            }
+        }
     }
 
     protected function setUp(): void

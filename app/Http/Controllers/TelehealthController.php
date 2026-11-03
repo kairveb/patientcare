@@ -6,7 +6,10 @@ use App\Http\Requests\EscalateTelehealthToErRequest;
 use App\Models\Prescription;
 use App\Models\ErVisit;
 use App\Models\TelehealthSession;
+use App\Models\Appointment;
+use App\Models\TelehealthParticipant;
 use App\Services\AuditLogService;
+use App\Services\AppointmentService;
 use App\Services\EmergencyAlertService;
 use App\Services\PatientConsentService;
 use App\Services\TelehealthService;
@@ -16,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use RuntimeException;
 
 class TelehealthController extends Controller
 {
@@ -24,7 +28,8 @@ class TelehealthController extends Controller
         protected TriageService $triage,
         protected AuditLogService $audit,
         protected EmergencyAlertService $emergencyAlerts,
-        protected PatientConsentService $consents
+        protected PatientConsentService $consents,
+        protected AppointmentService $appointments
     ) {}
 
     public function index(Request $request)
@@ -191,53 +196,198 @@ class TelehealthController extends Controller
 
 public function join(TelehealthSession $session, Request $request)
     {
-        $user = auth()->user();
-
-        $this->authorize('view', $session->appointment);
-        $isAssignedDoctor = $user?->hasRole('doctor')
-            && $user->provider?->id === $session->appointment?->provider_id;
-        $isSessionPatient = $user?->hasRole('patient')
-            && $user->patient?->id === $session->appointment?->patient_id;
-        $canViewJoinUrl = $isSessionPatient || $isAssignedDoctor || $user?->hasRole('super-admin');
-
-        if (! $canViewJoinUrl) {
-            $session->makeHidden(['join_url', 'host_start_url', 'zoom_meeting_id']);
-        } elseif (! $isAssignedDoctor && ! $user?->hasRole('super-admin')) {
-            $session->makeHidden(['host_start_url', 'zoom_meeting_id']);
-        }
-
-        abort_unless(
-            $session->status !== TelehealthSession::STATUS_ESCALATED,
-            403,
-            'This telehealth session has been escalated to the Emergency Department.'
-        );
-        $patient = $session->appointment?->patient;
-        if (! $patient || ! $this->consents->hasCurrentGrant($patient, 'TELEHEALTH')) {
-            if ($user?->hasRole('patient')) {
-                return redirect()->route('patient-consents.portal', ['required' => 'TELEHEALTH'])
-                    ->with('warning', 'Current telehealth consent is required before joining this session.');
-            }
-
-            abort(403, 'The patient must provide current telehealth consent before this session can be joined.');
-        }
-
-        abort_unless($session->isLive(), 409, 'Your doctor has not started this telehealth session yet.');
-
-        $token = $request->query('token');
-        abort_unless($this->telehealth->verifyJoinToken($session, $token), 403, 'Invalid or expired telehealth session link.');
-        abort_unless(Gate::allows('join-telehealth'), 403, 'You are not authorized to join this telehealth room.');
-
-        if ($user && $user->hasRole('patient')) {
-            $sessionPatientId = $session->appointment?->patient_id;
-            $patientUserId = $user->patient?->id;
-
-            if ($patientUserId === null || $sessionPatientId !== $patientUserId) {
-                abort(403, 'You can only join your own telehealth session.');
-            }
-        }
-
-        return view('telehealth.join', compact('session', 'canViewJoinUrl'));
+    $session->loadMissing(['appointment.patient', 'appointment.provider', 'appointment.appointmentType']);
+    $user = $request->user();
+    $role = $this->authorizedParticipantRole($session, $user);
+    if (! $role) {
+        $this->denyJoin($session, $user, 'not_appointment_patient_or_assigned_doctor');
     }
+
+    $reason = $this->telehealth->joinWindowReason($session);
+    if ($reason !== null) {
+        $this->denyJoin($session, $user, $reason, 403);
+    }
+    $patient = $session->appointment->patient;
+    if (! $patient || ! $this->consents->hasCurrentGrant($patient, 'TELEHEALTH')) {
+        $this->audit->log('TELEHEALTH_JOIN_DENIED', 'telehealth_session', $session->id, 'FAILURE', [
+            'reason' => 'current_telehealth_consent_missing',
+            'actor_role' => $role,
+        ], $user->id);
+
+        if ($role === 'patient') {
+            return redirect()->route('patient-consents.portal', ['required' => 'TELEHEALTH'])
+                ->with('warning', 'Current telehealth consent is required before joining this session.');
+        }
+
+        abort(403, 'The patient must provide current telehealth consent before this session can be joined.');
+    }
+    if ($role === 'patient' && ! $session->isLive()) {
+        $this->denyJoin($session, $user, 'doctor_not_started', 409);
+    }
+
+    try {
+        $demoMode = $this->telehealth->providerName() === 'jitsi_demo';
+    } catch (RuntimeException $exception) {
+        report($exception);
+
+        abort(503, 'Telehealth is not configured. Please contact the hospital before joining.');
+    }
+    $joinToken = $this->telehealth->issueJoinToken($session, $user);
+    $this->audit->log('TELEHEALTH_JOIN_TOKEN_ISSUED', 'telehealth_session', $session->id, 'SUCCESS', [
+        'actor_role' => $role,
+        'expires_in_minutes' => (int) config('telehealth.join_token_ttl_minutes', 5),
+    ], $user->id);
+
+    return view('telehealth.join', [
+        'session' => $session,
+        'role' => $role,
+        'demoMode' => $demoMode,
+        'videoDetails' => null,
+        'joined' => false,
+        'joinToken' => $joinToken,
+    ]);
+}
+
+public function connect(TelehealthSession $session, Request $request)
+{
+    $data = $request->validate([
+        'privacy_acknowledged' => ['required', 'accepted'],
+        'join_token' => ['required', 'string', 'max:512'],
+    ]);
+    $session->loadMissing(['appointment.patient', 'appointment.provider', 'appointment.appointmentType']);
+    $user = $request->user();
+    $role = $this->authorizedParticipantRole($session, $user);
+    if (! $role) {
+        $this->denyJoin($session, $user, 'not_appointment_patient_or_assigned_doctor');
+    }
+
+    $reason = $this->telehealth->joinWindowReason($session);
+    if ($reason !== null) {
+        $this->denyJoin($session, $user, $reason, 403);
+    }
+    if (! $session->appointment->patient
+        || ! $this->consents->hasCurrentGrant($session->appointment->patient, 'TELEHEALTH')) {
+        $this->denyJoin($session, $user, 'current_telehealth_consent_missing');
+    }
+    if ($role === 'patient' && ! $session->isLive()) {
+        $this->denyJoin($session, $user, 'doctor_not_started', 409);
+    }
+
+    $this->telehealth->consumeJoinToken($session, $user, $data['join_token']);
+    $this->audit->log('TELEHEALTH_CONSENT_ACKNOWLEDGED', 'telehealth_session', $session->id, 'SUCCESS', [
+        'actor_role' => $role,
+    ], $user->id);
+
+    $details = $this->telehealth->providerJoinDetails($session, $user);
+    if ($role === 'doctor') {
+        $appointment = Appointment::query()->findOrFail($session->appointment_id);
+        if ($appointment->status === Appointment::STATUS_CONFIRMED) {
+            $appointment = $this->appointments->checkIn($appointment, $user->id);
+        }
+        if ($appointment->status === Appointment::STATUS_CHECKED_IN) {
+            $this->appointments->transitionStatus(
+                $appointment,
+                Appointment::STATUS_IN_CONSULTATION,
+                $user->id,
+                'Assigned doctor joined telehealth consultation'
+            );
+        }
+        $this->audit->log('TELEHEALTH_DOCTOR_JOINED', 'telehealth_session', $session->id, 'SUCCESS', [
+            'appointment_id' => $session->appointment_id,
+        ], $user->id);
+    }
+
+    $this->telehealth->join($session, $user->id, $role, true);
+    $this->audit->log('TELEHEALTH_JOIN_ALLOWED', 'telehealth_session', $session->id, 'SUCCESS', [
+        'actor_role' => $role,
+        'provider' => $details['provider'],
+    ], $user->id);
+
+    return view('telehealth.join', [
+        'session' => $session->fresh(['appointment.patient', 'appointment.provider', 'appointment.appointmentType']),
+        'role' => $role,
+        'demoMode' => $details['provider'] === 'jitsi_demo',
+        'videoDetails' => $details,
+        'joined' => true,
+    ]);
+}
+
+public function leave(TelehealthSession $session, Request $request)
+{
+    $session->loadMissing(['appointment.patient', 'appointment.provider']);
+    $user = $request->user();
+    $role = $this->authorizedParticipantRole($session, $user);
+    if (! $role) {
+        $this->denyJoin($session, $user, 'not_appointment_patient_or_assigned_doctor');
+    }
+    $endSession = $request->boolean('end_session');
+    if ($endSession && $role !== 'doctor') {
+        $this->denyJoin($session, $user, 'only_assigned_doctor_can_end_session');
+    }
+
+    $participant = TelehealthParticipant::query()
+        ->where('telehealth_session_id', $session->id)
+        ->where('user_id', $user->id)
+        ->where('role', $role)
+        ->whereNull('left_at')
+        ->latest('joined_at')
+        ->first();
+    if (! $participant) {
+        $this->denyJoin($session, $user, 'participant_not_joined');
+    }
+    $participant->update(['left_at' => now()]);
+
+    $this->audit->log('TELEHEALTH_PARTICIPANT_LEFT', 'telehealth_session', $session->id, 'SUCCESS', [
+        'actor_role' => $role,
+    ], $user->id);
+
+    if ($endSession) {
+        $this->telehealth->complete($session);
+        TelehealthParticipant::query()
+            ->where('telehealth_session_id', $session->id)
+            ->whereNull('left_at')
+            ->update(['left_at' => now()]);
+        $this->audit->log('TELEHEALTH_SESSION_ENDED', 'telehealth_session', $session->id, 'SUCCESS', [
+            'ended_by_role' => $role,
+        ], $user->id);
+    }
+
+    $destination = $role === 'patient'
+        ? route('patients.portal.telehealth')
+        : route('telehealth.index');
+
+    return redirect($destination)->with('status', $endSession ? 'Consultation ended.' : 'You left the consultation.');
+}
+
+private function authorizedParticipantRole(TelehealthSession $session, $user): ?string
+{
+    if (! $user) {
+        return null;
+    }
+    if ($user->hasRole('patient') && (int) $user->patient?->id === (int) $session->appointment?->patient_id) {
+        return 'patient';
+    }
+    if ($user->hasRole('doctor') && (int) $user->provider?->id === (int) $session->appointment?->provider_id) {
+        return 'doctor';
+    }
+
+    return null;
+}
+
+private function denyJoin(TelehealthSession $session, $user, string $reason, int $status = 403): never
+{
+    $this->audit->log('TELEHEALTH_JOIN_DENIED', 'telehealth_session', $session->id, 'FAILURE', [
+        'reason' => $reason,
+    ], $user?->id);
+    abort($status, match ($reason) {
+        'too_early' => 'You can join starting '.(int) config('telehealth.join_early_minutes', 15).' minutes before the appointment.',
+        'too_late' => 'The telehealth joining window has ended. Contact the hospital for help.',
+        'doctor_not_started' => 'Please wait. Your doctor has not started this consultation yet.',
+        'appointment_not_confirmed' => 'This appointment is not confirmed for telehealth.',
+        'session_not_joinable' => 'This telehealth session is no longer available.',
+        default => 'You are not authorized to join this telehealth session.',
+    });
+}
 
     public function createMeeting(Request $request, TelehealthSession $session)
     {
@@ -256,26 +406,31 @@ public function join(TelehealthSession $session, Request $request)
         ]);
 
         $session->update([
-            'start_time' => $data['start_time'] ? Carbon::parse($data['start_time']) : $session->start_time,
+            'start_time' => ! empty($data['start_time']) ? Carbon::parse($data['start_time']) : $session->start_time,
             'duration' => $data['duration'] ?? $session->duration,
         ]);
 
-        if (! $this->telehealth->isConfigured()) {
+        try {
+            $createdSession = $this->telehealth->createSession($session->appointment);
+        } catch (\RuntimeException $exception) {
+            report($exception);
+
             if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Zoom is not configured. Session details saved locally. Enable ZOOM_ENABLED and credentials to create a live meeting.',
-                    'data' => $session->fresh(),
-                ]);
+                    'success' => false,
+                    'message' => 'Telehealth is not configured. Configure a live provider or explicitly select demo mode.',
+                ], 503);
             }
 
-            return back()->with('warning', 'Zoom is not configured. Session details saved locally. Enable ZOOM_ENABLED and credentials to create a live meeting.');
+            return back()->with('error', 'The video consultation could not be prepared. Please try again or contact support.');
+        }
+        if ($this->telehealth->providerName() === 'jitsi_demo') {
+            return back()->with('warning', 'Demo telehealth session prepared. This mode is not for real patient consultations.');
         }
 
-        $createdSession = $this->telehealth->createSession($session->appointment);
         $message = $createdSession->zoom_meeting_id
             ? 'Zoom meeting created successfully.'
-            : 'Zoom meeting could not be created. A protected local telehealth room is ready.';
+            : 'The telehealth provider did not create a meeting.';
 
         if ($request->expectsJson() || $request->wantsJson() || $request->ajax()) {
             return response()->json([
