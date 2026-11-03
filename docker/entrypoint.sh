@@ -15,6 +15,10 @@ if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
     exit 1
 fi
 
+if [ ! -e /var/www/html/public/storage ] && [ ! -L /var/www/html/public/storage ]; then
+    ln -s /var/www/html/storage/app/public /var/www/html/public/storage
+fi
+
 printf 'Listen 0.0.0.0:%s\n' "$PORT" > /etc/apache2/ports.conf
 sed "s/@PORT@/${PORT}/g" \
     /etc/apache2/sites-available/pacc.conf.template \

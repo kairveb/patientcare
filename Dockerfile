@@ -6,7 +6,22 @@ COPY . .
 RUN npm run build
 
 FROM php:8.3-apache AS php-base
-RUN docker-php-ext-install pdo_mysql \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libcurl4-openssl-dev \
+        libfreetype6-dev \
+        libicu-dev \
+        libjpeg62-turbo-dev \
+        libonig-dev \
+        libpng-dev \
+        libxml2-dev \
+        libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install bcmath curl dom gd intl mbstring opcache pdo_mysql xml zip \
+    && for extension in bcmath curl dom gd intl mbstring opcache pdo_mysql xml zip; do \
+        php -m | grep -iq "^${extension}$" || { echo "Missing required PHP extension: ${extension}" >&2; exit 1; }; \
+    done \
+    && rm -rf /var/lib/apt/lists/* \
     && a2enmod rewrite headers
 
 FROM php-base AS vendor

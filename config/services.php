@@ -48,7 +48,7 @@ return [
         'retries' => (int) env('AI_RETRIES', 1),
         'gemini' => [
             'api_key' => env('GEMINI_API_KEY'),
-            'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+            'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
         ],
         'openai' => [
             'api_key' => env('OPENAI_API_KEY'),

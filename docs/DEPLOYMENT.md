@@ -4,7 +4,7 @@ Use synthetic patient data for demos. Never copy secrets into this document, sou
 
 ## HostForge single-container deployment
 
-The repository includes a root Dockerfile for a `php:8.3-apache` runtime, a Node/Vite build stage, and Supervisor as the foreground process manager. Apache serves `/var/www/html/public`. The entrypoint reads the platform-provided `PORT`, configures Apache to listen on `0.0.0.0:$PORT`, and starts Supervisor. The Docker health check requests `/up`. `pdo_mysql` is installed in the PHP image; confirm it with `php -m` in the built image before the first production deployment. Docker is not assumed to expose persistent storage: clinical document and identity uploads use a private S3-compatible disk, while logs go to stderr and session/cache/queue storage use the managed MariaDB database.
+The repository includes a root Dockerfile for a `php:8.3-apache` runtime, a Node/Vite build stage, and Supervisor as the foreground process manager. Apache serves `/var/www/html/public`. The entrypoint reads the platform-provided `PORT`, creates `public/storage` if missing, configures Apache to listen on `0.0.0.0:$PORT`, and starts Supervisor. The Docker health check requests `/up`; the PHP image installs and build-checks the application extensions. Docker is not assumed to expose persistent storage: clinical document and identity uploads use a private S3-compatible disk, while logs go to stderr and session/cache/queue storage use the managed MariaDB database. Provider photos still use the local public disk, and uploaded files, provider photos, and local logs can be lost on redeploy unless storage is persistent.
 
 Set `DB_CONNECTION=mariadb`, `BROADCAST_CONNECTION=null`, `QUEUE_CONNECTION=database`, `SESSION_DRIVER=database`, `CACHE_STORE=database`, `FILESYSTEM_DISK=s3`, `LOG_CHANNEL=stderr`, `SESSION_LIFETIME=120`, `SESSION_ENCRYPT=true`, `SESSION_SECURE_COOKIE=true`, `INACTIVITY_ENABLED=true`, and `SESSION_IDLE_MINUTES=5`. The idle timeout is in minutes; session lifetime is also in minutes. Configure a private bucket with provider-side encryption at rest, private access policy, and the object-store endpoint, bucket, region, and credentials from HostForge's secret/environment facilities. The `league/flysystem-aws-s3-v3` package is required for the S3 disk. Keep Reverb off unless WebSocket hosting is separately configured; enabling it requires `BROADCAST_CONNECTION=reverb`, the `REVERB_*` settings, and a Reverb process/routed WebSocket endpoint.
 
@@ -13,23 +13,29 @@ Set `DB_CONNECTION=mariadb`, `BROADCAST_CONNECTION=null`, `QUEUE_CONNECTION=data
 1. Set production secrets and managed MariaDB/object-storage settings. Keep `APP_DEBUG=false`, set `APP_URL` to the HTTPS origin, and use `APP_TIMEZONE=Asia/Manila`. Configure a real mail transport before enabling OTP (`OTP_ENABLED=true`); the `log` and `array` mailers are not suitable for OTP delivery.
 2. Ask HostForge for the exact proxy source CIDRs and forwarded-scheme behavior. Until confirmed, do not guess `TRUSTED_PROXIES`. Laravel's `TrustProxies` is the only proxy-trust mechanism configured here; Apache `mod_remoteip` is intentionally not enabled. Incorrect or missing trust configuration behind an HTTPS-terminating proxy can make Laravel treat HTTPS requests as HTTP and cause a `ForceHttps` redirect loop.
 3. Before public traffic, test HTTPS handling: the proxied `/login` request should return normally (not repeatedly redirect), HTTPS URLs should be generated, and the session cookie should be Secure. The existing tests cover trusted and untrusted proxy behavior, but not HostForge's actual CIDRs.
-4. Keep the instance count at **1**. The scheduler is supervised in the same container as Apache and the queue worker. More than one instance can duplicate appointment reminders until scheduler `onOneServer()` protection using a shared cache lock is added and verified.
-5. Run `php artisan hims:preflight` against the release configuration before going live, then from a serialized, one-off release task—not every container start—run:
+4. Keep exactly **ONE container or instance running the scheduler**. The scheduler is supervised in the same container as Apache and the queue worker. More than one scheduler can duplicate appointment reminders until scheduler `onOneServer()` protection using a shared cache lock is added and verified.
+5. On a fresh server, from the project root and using a serialized release task—not every container start—run this order:
 
    ```sh
+   composer install --no-dev --optimize-autoloader --no-interaction
+   php artisan key:generate
    php artisan migrate --force
    php artisan db:seed --force
+   php artisan app:create-admin
+   php artisan storage:link
    php artisan config:cache
    php artisan route:cache
    php artisan view:cache
+   php artisan hims:preflight
+   php artisan slots:generate
    ```
 
-   `DatabaseSeeder` installs reference data, RBAC permissions, the admin role, and care-request RBAC in every environment. It skips demo accounts and synthetic demo data in production; only the non-production branch runs demo seeders.
+   Generate `APP_KEY` only when first setting up an environment; do not generate a new key during ordinary releases. `DatabaseSeeder` installs reference data, RBAC permissions, the admin role, and care-request RBAC in every environment. It skips demo accounts and synthetic demo data in production; only the non-production branch runs demo seeders. Thus `db:seed --force` uses the current production-safe `DatabaseSeeder`; do not invoke `HimsSeeder` or `DemoDataSeeder` in production. `app:create-admin` is interactive and must not be re-run casually: it can update the existing Super Admin credentials and role. `hims:preflight` reads migration state from the database, so it must run after migrations. Run `slots:generate` after provider schedules have been configured; otherwise it may create no slots.
 6. Confirm the platform health check uses `/up`, the Apache listener/vhost use the assigned `$PORT`, `pdo_mysql` is present in the built image, and the `resources/data/psgc_2026_q2.csv` dataset is packaged.
 7. Configure provider-managed database and object-storage backups, retention, and access controls; perform and record a restore test before any real patient data is stored. `DB_BACKUP_ENABLED=false` prevents the local `db:backup` task from being scheduled in production; it does not configure managed backups.
 8. Do not use `hims:demo-accounts`, `app:create-demo-staff`, or `DemoDataSeeder` for production demo provisioning; those legacy paths include Super Admin accounts or unsafe shared-password behavior. If synthetic demo data is explicitly required, run `php artisan app:seed-demo --force` only with `DEMO_MODE=true` supplied through the deployment's secret/environment facility. This creates four non-admin `@example.com` accounts and marked synthetic data; provide distinct account secrets with `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD`, or securely save the generated passwords shown once. Existing account passwords are not reset. To remove the marked records, run `php artisan app:purge-demo --force` with `DEMO_MODE=true`; the command reports and refuses to delete when unmarked records depend on demo data, requires an additional interactive confirmation, and never deletes audit logs. Review the resulting records and blockers before proceeding.
 
-The startup command is one foreground `supervisord -n` process managing Apache, `php artisan queue:work --tries=3 --timeout=60`, and `php artisan schedule:work`. Reverb is not started. Platform behavior for Dockerfile builds, proxy CIDRs, managed DB TLS, object storage, health check routing, and serialized release tasks must be confirmed with HostForge; they have not been independently verified.
+The startup command is one foreground `supervisord -n` process managing Apache, `php artisan queue:work --tries=3 --timeout=60`, and `php artisan schedule:work`. Reverb is not started. Run only one instance of this combined container because each instance runs the scheduler. Platform behavior for Dockerfile builds, proxy CIDRs, managed DB TLS, object storage, health check routing, and serialized release tasks must be confirmed with the selected host; they have not been independently verified.
 
 The public pre-registration ticket and MFA enrollment QR codes are generated locally as SVG data URIs; no third-party QR image service is used by those flows.
 
@@ -41,7 +47,7 @@ Before public access, add and test rate limits for web login, registration, pass
 
 ## Cloudflare Tunnel demo
 
-Set these values in the private `.env` used by the demo. Keep `SESSION_DOMAIN` blank so the browser receives a host-only cookie for the current tunnel URL.
+Set these values in the private `.env` used by the demo. Keep `SESSION_DOMAIN` blank so the browser receives a host-only cookie for the current tunnel URL. Any uploaded documents, provider photos, and local log files on an ephemeral filesystem can be lost on redeploy; use persistent object storage or a mounted volume for uploads and platform log collection for logs.
 
 ```dotenv
 APP_ENV=production

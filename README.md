@@ -148,7 +148,7 @@ MAIL_MAILER=log        # local mail capture
 # Optional integrations (disabled by default)
 GOOGLE_MAPS_ENABLED=false
 GOOGLE_MAPS_API_KEY=
-GEMINI_ENABLED=false
+AI_PROVIDER=rules
 GEMINI_API_KEY=
 ZOOM_ENABLED=false
 ZOOM_ACCOUNT_ID=
@@ -166,7 +166,7 @@ For production, copy `.env.production.example` to `.env` and set real values.
 
 `ReferenceDataSeeder` installs the roles, permissions, departments, specialties, and appointment types required by the application. Charge-rate table structure is supplied by migrations; actual prices are intentionally not seeded because they must be approved and configured by the hospital.
 
-`DemoDataSeeder` installs sample users, nurse department assignments, patients, appointments, and workflow examples. It throws an exception when `APP_ENV=production`. `HimsSeeder` remains a compatibility seeder that invokes both seeders, and `DatabaseSeeder` continues to use it for existing tests and local setup.
+`DatabaseSeeder` installs reference data, RBAC reconciliation, the admin role, and care-request RBAC in every environment. It seeds synthetic demo data only outside production. `HimsSeeder` remains a compatibility seeder for tests and local setup; it invokes demo data and must not be used in production.
 
 `npm run test:e2e` in `tests/e2e` currently signs in with the seeded `@coor.test` role accounts and expects demo workflow records. Seed demo data in a non-production E2E database before running those browser tests. Do not point E2E or reset commands at an operational database.
 
@@ -248,14 +248,23 @@ Verification links are generated with the production `APP_URL` root and forced t
 
 After changing production environment values, clear and rebuild Laravel's cached configuration with `php artisan config:clear` followed by `php artisan config:cache`.
 
-Migrations create the schema but do not create users or roles. Install the RBAC reference data without demo records, then create the first admin interactively:
+For a fresh deployment, run the following from the project root in order. `DatabaseSeeder` is the current production-safe seeder: it installs reference and RBAC data but skips demo records when `APP_ENV=production`. `hims:preflight` queries migration state and therefore must run after migrations. `slots:generate` should run after provider schedules have been configured.
 
 ```bash
-php artisan db:seed --class=ReferenceDataSeeder --force
+composer install --no-dev --optimize-autoloader --no-interaction
+php artisan key:generate
+php artisan migrate --force
+php artisan db:seed --force
 php artisan app:create-admin
+php artisan storage:link
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan hims:preflight
+php artisan slots:generate
 ```
 
-Do not run `HimsSeeder`, `DatabaseSeeder`, or `DemoDataSeeder` against production. The legacy `hims:demo-accounts` and `app:create-demo-staff` commands create a Super Admin account and are not the production demo-data workflow. Use `php artisan app:seed-demo` for four synthetic non-admin accounts and marked demo records. In production it requires both `--force` and `DEMO_MODE=true`; use the corresponding `app:purge-demo` command to remove marked records, after reviewing its dependency checks and explicitly confirming the purge.
+Run `key:generate` only once when initially configuring the environment; changing `APP_KEY` can invalidate encrypted data. `app:create-admin` is interactive and must not be re-run casually because it can update the existing Super Admin credentials and role. Do not run `HimsSeeder` or `DemoDataSeeder` against production. The legacy `hims:demo-accounts` and `app:create-demo-staff` commands create a Super Admin account and are not the production demo-data workflow. Use `php artisan app:seed-demo` for four synthetic non-admin accounts and marked demo records. In production it requires both `--force` and `DEMO_MODE=true`; use the corresponding `app:purge-demo` command to remove marked records, after reviewing its dependency checks and explicitly confirming the purge.
 
 For other deployments, set the following production values:
 - `APP_ENV=production`
@@ -273,18 +282,9 @@ For other deployments, set the following production values:
 
 ## 10.2 Production Deployment
 
-Run these commands before going live:
+The root Docker image builds Vite assets. For a VPS or another host that builds on the server, run `npm ci` and `npm run build` as part of preparing the release before the Artisan first-run order above. Exactly **one container or instance** should run `schedule:work` (or the scheduler cron); additional instances can duplicate scheduled appointment reminders.
 
-```bash
-npm install
-npm run build
-php artisan key:generate --ansi
-php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan optimize --force
-```
+On an ephemeral host without persistent storage, local uploaded clinical documents, care-request result files, identity images, provider photos, and local log files can be lost on redeploy. Configure the S3-compatible disk for default/private uploads or mount durable storage; note that provider photos currently use the local public disk. Use platform log collection (`LOG_CHANNEL=stderr`) for logs.
 
 ## 11. Migration Instructions
 
@@ -296,11 +296,11 @@ php artisan migrate
 ## 12. Seeder Instructions
 
 ```bash
-php artisan db:seed --class=ReferenceDataSeeder
+php artisan db:seed
 php artisan app:seed-demo
 ```
 
-`ReferenceDataSeeder` installs required roles, permissions, departments, specialties, and appointment types. `app:seed-demo` creates marked synthetic records and four accounts without a Super Admin. Set `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD` through the deployment secret facility to supply account passwords; otherwise generated passwords are shown once by the command and must be saved. It never resets an existing account password. `DemoDataSeeder`, `HimsSeeder`, and `php artisan db:seed` remain compatibility paths for tests and isolated local/E2E environments only; do not use them in production.
+For local development, `php artisan db:seed` runs `DatabaseSeeder`, which installs reference data and seeds local demo data outside production. `app:seed-demo` creates marked synthetic records and four accounts without a Super Admin. Set `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD` through the deployment secret facility to supply account passwords; otherwise generated passwords are shown once by the command and must be saved. It never resets an existing account password. `DemoDataSeeder` and `HimsSeeder` are compatibility paths for tests and isolated local/E2E environments only; do not use them in production. The ordinary `php artisan db:seed --force` command uses `DatabaseSeeder`, which is production-safe and skips demo seeders when `APP_ENV=production`.
 
 The E2E browser tests still depend on the legacy `@coor.test` accounts and workflow examples. Use those only in a disposable, isolated E2E database; do not expose their shared demo credentials to real users.
 
@@ -379,7 +379,7 @@ Integrations are **optional** and isolated behind service classes. When disabled
 `app/Services/ZoomService.php` + `TelehealthService` — creates telehealth meetings. Set `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_ENABLED=true`. Patients receive the join URL only; host secrets are never exposed in the frontend.
 
 ### 18. Gemini
-`app/Services/GeminiService.php` — assistive, non-clinical assistance only. Set `GEMINI_API_KEY`, `GEMINI_ENABLED=true`. Gemini never autonomously diagnoses, prescribes, or determines ER priority.
+`app/Services/GeminiService.php` — assistive, non-clinical assistance only. Select Gemini with `AI_PROVIDER=gemini` and set `GEMINI_API_KEY`. Gemini never autonomously diagnoses, prescribes, or determines ER priority.
 
 ### 19. Zapier
 `app/Services/ZapierService.php` — operational webhook automation. Set `ZAPIER_WEBHOOK_URL`, `ZAPIER_ENABLED=true`. MySQL remains the source of truth.

@@ -13,6 +13,7 @@ use App\Services\AiEvaluationService;
 use App\Services\PatientConsentService;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -243,34 +244,45 @@ class AiReportingFeaturesTest extends TestCase
 
     public function test_evaluation_csv_contains_only_approved_aggregate_fields_and_no_identifiers(): void
     {
-        $admin = $this->userWithRole('super-admin');
-        $patient = Patient::factory()->create([
-            'first_name' => 'Sensitive',
-            'last_name' => 'Person',
-            'mrn' => 'MRN-EVAL-PRIVATE',
-            'sex' => 'Female',
-        ]);
-        $check = $this->symptomCheck($patient, 'gemini', false, 'Emergency');
-        $check->forceFill([
-            'clinician_final_urgency' => 'Urgent',
-            'clinician_agreement' => 'too_low',
-            'clinician_reviewed_by' => $admin->id,
-            'clinician_reviewed_at' => now(),
-        ])->save();
+        Carbon::setTestNow('2026-11-03 12:00:00');
 
-        $response = $this->withSession(['auth.password_confirmed_at' => time()])
-            ->actingAs($admin)
-            ->get(route('reports.export', ['report' => 'ai-evaluation-dataset', 'format' => 'csv']))
-            ->assertOk();
-        $csv = $response->streamedContent();
-        $lines = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
-        $this->assertSame([
-            'urgency', 'specialty', 'age range', 'sex', 'clinician agreement', 'rule override flag', 'week',
-        ], $lines[0]);
-        $this->assertCount(7, $lines[1]);
-        $this->assertStringNotContainsString('Sensitive', $csv);
-        $this->assertStringNotContainsString('MRN-EVAL-PRIVATE', $csv);
-        $this->assertStringNotContainsString((string) $patient->id, $csv);
+        try {
+            $admin = $this->userWithRole('super-admin');
+            $patient = Patient::factory()->create([
+                'id' => 86753091,
+                'first_name' => 'Sensitive',
+                'last_name' => 'Person',
+                'mrn' => 'MRN-EVAL-PRIVATE',
+                'reference_code' => 'REF-EVAL-PRIVATE-86753091',
+                'sex' => 'Female',
+            ]);
+            $check = $this->symptomCheck($patient, 'gemini', false, 'Emergency');
+            $check->forceFill([
+                'id' => 97531864,
+                'clinician_final_urgency' => 'Urgent',
+                'clinician_agreement' => 'too_low',
+                'clinician_reviewed_by' => $admin->id,
+                'clinician_reviewed_at' => now(),
+            ])->save();
+
+            $response = $this->withSession(['auth.password_confirmed_at' => time()])
+                ->actingAs($admin)
+                ->get(route('reports.export', ['report' => 'ai-evaluation-dataset', 'format' => 'csv']))
+                ->assertOk();
+            $csv = $response->streamedContent();
+            $lines = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+            $this->assertSame([
+                'urgency', 'specialty', 'age range', 'sex', 'clinician agreement', 'rule override flag', 'week',
+            ], $lines[0]);
+            $this->assertCount(7, $lines[1]);
+            $this->assertStringNotContainsString('Sensitive', $csv);
+            $this->assertStringNotContainsString('MRN-EVAL-PRIVATE', $csv);
+            $this->assertStringNotContainsString((string) $patient->id, $csv);
+            $this->assertStringNotContainsString((string) $check->id, $csv);
+            $this->assertStringNotContainsString($patient->reference_code, $csv);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function patientWithAiConsent(): array
