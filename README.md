@@ -248,14 +248,14 @@ Verification links are generated with the production `APP_URL` root and forced t
 
 After changing production environment values, clear and rebuild Laravel's cached configuration with `php artisan config:clear` followed by `php artisan config:cache`.
 
-For a fresh deployment, run the following from the project root in order. `DatabaseSeeder` is the current production-safe seeder: it installs reference and RBAC data but skips demo records when `APP_ENV=production`. `hims:preflight` queries migration state and therefore must run after migrations. `slots:generate` should run after provider schedules have been configured.
+For a fresh deployment, run the following from the project root in order. `DatabaseSeeder` is the current production-safe seeder: it installs reference and RBAC data but skips demo records when `APP_ENV=production`. `hims:preflight` queries migration state and therefore must run after migrations. `slots:generate` should run after provider schedules have been configured. Configure the bootstrap admin variables in the host environment before running the bootstrap command; remove the password variable after the account is created.
 
 ```bash
 composer install --no-dev --optimize-autoloader --no-interaction
 php artisan key:generate
 php artisan migrate --force
 php artisan db:seed --force
-php artisan app:create-admin
+php artisan app:bootstrap-admin
 php artisan storage:link
 php artisan config:cache
 php artisan route:cache
@@ -264,7 +264,7 @@ php artisan hims:preflight
 php artisan slots:generate
 ```
 
-Run `key:generate` only once when initially configuring the environment; changing `APP_KEY` can invalidate encrypted data. `app:create-admin` is interactive and must not be re-run casually because it can update the existing Super Admin credentials and role. Do not run `HimsSeeder` or `DemoDataSeeder` against production. The legacy `hims:demo-accounts` and `app:create-demo-staff` commands create a Super Admin account and are not the production demo-data workflow. Use `php artisan app:seed-demo` for four synthetic non-admin accounts and marked demo records. In production it requires both `--force` and `DEMO_MODE=true`; use the corresponding `app:purge-demo` command to remove marked records, after reviewing its dependency checks and explicitly confirming the purge.
+Run `key:generate` only once when initially configuring the environment; changing `APP_KEY` can invalidate encrypted data. `app:bootstrap-admin` creates a Super Admin only when none exists, and a rerun never updates an existing user or roles. `RUN_MIGRATIONS=true` opts a single serialized container start into `php artisan migrate --force`; otherwise run migrations as a release task, since startup will warn that pending migrations are not applied. The production entrypoint also warns if email OTP is enabled with `MAIL_MAILER=log`; OTP remains enabled. Do not run `HimsSeeder` or `DemoDataSeeder` against production. The legacy `app:create-admin`, `hims:demo-accounts`, and `app:create-demo-staff` commands can create or modify Super Admin accounts and are not the production demo-data workflow. Use `php artisan app:seed-demo` for four synthetic non-admin accounts and marked demo records. In production it requires both `--force` and `DEMO_MODE=true`; use the corresponding `app:purge-demo` command to remove marked records, after reviewing its dependency checks and explicitly confirming the purge.
 
 For other deployments, set the following production values:
 - `APP_ENV=production`
