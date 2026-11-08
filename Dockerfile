@@ -17,9 +17,9 @@ RUN apt-get update \
         libxml2-dev \
         libzip-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install bcmath curl dom gd intl mbstring opcache pdo_mysql xml zip \
+    && docker-php-ext-install bcmath gd intl opcache pdo_mysql zip \
     && for extension in bcmath curl dom gd intl mbstring opcache pdo_mysql xml zip; do \
-        php -m | grep -iq "^${extension}$" || { echo "Missing required PHP extension: ${extension}" >&2; exit 1; }; \
+        php -m | grep -iqE "^(Zend )?${extension}$" || { echo "Missing required PHP extension: ${extension}" >&2; exit 1; }; \
     done \
     && rm -rf /var/lib/apt/lists/* \
     && a2enmod rewrite headers
