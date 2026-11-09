@@ -43,9 +43,9 @@ class RegisteredUserController extends Controller
             'terms_accepted' => ['accepted'],
             'password' => [
                 'required',
-                'confirmed',
                 Rules\Password::min(8)->letters()->mixedCase()->numbers()->symbols(),
             ],
+            'password_confirmation' => ['required', 'same:password'],
         ], [
             'password.min' => 'Password must be at least 8 characters.',
             'password.letters' => 'Password must include at least one letter.',

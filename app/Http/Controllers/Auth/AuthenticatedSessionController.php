@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\LoginOtpService;
 use App\Services\MfaService;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -158,6 +159,9 @@ class AuthenticatedSessionController extends Controller
             }
 
             app(AuditLogService::class)->log('OTP_VERIFIED', 'authentication', $account->id);
+            if (! $account->hasVerifiedEmail() && $account->markEmailAsVerified()) {
+                event(new Verified($account));
+            }
         }
 
         $this->completeLogin($request, $account);

@@ -26,5 +26,6 @@
       <a class="underline" href="{{ route('privacy.terms') }}">Terms and Agreement</a>
     </footer>
     @stack('scripts')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
   </body>
 </html>

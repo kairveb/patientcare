@@ -45,13 +45,32 @@
                         @error('email')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="form-field">
+                    <div class="form-field" x-data="{
+                        password: '',
+                        get requirements() {
+                            return [
+                                { label: 'At least 8 characters', met: Array.from(this.password).length >= 8 },
+                                { label: 'A lowercase letter', met: /\p{Ll}/u.test(this.password) },
+                                { label: 'An uppercase letter', met: /\p{Lu}/u.test(this.password) },
+                                { label: 'A number', met: /\p{N}/u.test(this.password) },
+                                { label: 'A symbol, punctuation mark, or separator', met: /[\p{Z}\p{S}\p{P}]/u.test(this.password) },
+                            ];
+                        }
+                    }">
                         <label for="password">Password</label>
                         <div class="password-field">
-                            <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Create a secure password" required>
+                            <input id="password" name="password" type="password" x-model="password" aria-describedby="password-requirements" autocomplete="new-password" placeholder="Create a secure password" required>
                             <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
                         </div>
                         @error('password')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                        <ul id="password-requirements" class="mt-3 space-y-1 text-sm" aria-live="polite">
+                            <template x-for="requirement in requirements" :key="requirement.label">
+                                <li class="flex justify-between gap-3" :class="requirement.met ? 'text-emerald-700' : 'text-slate-500'">
+                                    <span x-text="requirement.label"></span>
+                                    <span class="font-medium" x-text="requirement.met ? 'Met' : 'Missing'"></span>
+                                </li>
+                            </template>
+                        </ul>
                     </div>
 
                     <div class="form-field">

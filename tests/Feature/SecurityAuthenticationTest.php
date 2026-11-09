@@ -7,7 +7,9 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\LoginOtpNotification;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -64,6 +66,49 @@ class SecurityAuthenticationTest extends TestCase
             'action' => 'LOGIN_SUCCESS',
             'resource_id' => $user->id,
         ]);
+    }
+
+    public function test_email_otp_verifies_an_unverified_user_before_loading_the_dashboard(): void
+    {
+        $user = User::factory()->unverified()->create();
+        Event::fake([Verified::class]);
+
+        $this->post(route('login'), [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('mfa.challenge'));
+
+        $code = Notification::sent($user, LoginOtpNotification::class)->first()->code;
+        $this->post(route('mfa.verify'), ['code' => $code])
+            ->assertRedirect(route('dashboard', absolute: false));
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        Event::assertDispatched(Verified::class, fn (Verified $event): bool => $event->user->is($user));
+
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewIs('dashboard');
+    }
+
+    public function test_registration_lists_password_requirements_and_reports_confirmation_mismatch(): void
+    {
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertSee('At least 8 characters')
+            ->assertSee('A lowercase letter')
+            ->assertSee('A symbol, punctuation mark, or separator');
+
+        $this->post(route('register'), [
+            'name' => 'New Patient',
+            'email' => 'new.patient@example.test',
+            'password' => 'ValidPass1!',
+            'password_confirmation' => 'DifferentPass1!',
+            'privacy_notice_accepted' => '1',
+            'terms_accepted' => '1',
+        ])
+            ->assertSessionHasErrors('password_confirmation')
+            ->assertSessionDoesntHaveErrors('password');
     }
 
     public function test_expired_otp_is_rejected_and_cleared(): void
