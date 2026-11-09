@@ -217,7 +217,7 @@ class PhilippineAddressDataset
 
         $cacheKey = self::CACHE_PREFIX.hash_file('sha256', $path);
 
-        return Cache::rememberForever($cacheKey, function () use ($path): array {
+        return Cache::store('file')->rememberForever($cacheKey, function () use ($path): array {
             $handle = fopen($path, 'rb');
             if ($handle === false) {
                 throw new RuntimeException('The local PSGC dataset could not be opened.');

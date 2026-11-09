@@ -66,12 +66,17 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Civil status</label>
-                    <input type="text" name="civil_status" value="{{ old('civil_status', $patient->civil_status) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <select name="civil_status" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                        <option value="">Select civil status</option>
+                        @foreach (['Single', 'Married', 'Widowed', 'Separated', 'Annulled/Divorced'] as $civilStatus)
+                            <option value="{{ $civilStatus }}" @selected(old('civil_status', $patient->civil_status) === $civilStatus)>{{ $civilStatus }}</option>
+                        @endforeach
+                    </select>
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Nationality</label>
-                    <input type="text" name="nationality" value="{{ old('nationality', $patient->nationality) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="nationality" value="{{ old('nationality') ?: ($patient->nationality ?: 'Filipino') }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>

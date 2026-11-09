@@ -10,6 +10,7 @@ use App\Models\Patient;
 use App\Models\PatientAddress;
 use App\Models\Role;
 use App\Models\User;
+use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
 use App\Services\BillingAggregationService;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,6 +186,72 @@ class PatientRegistrationCompletenessTest extends TestCase
         $this->assertSame('Old City Label', $address->city);
         $this->assertSame('Old Province Label', $address->province);
         $this->assertNull($address->region_psgc_code);
+    }
+
+    public function test_patient_profile_defaults_nationality_and_saves_supported_civil_status_without_reconsent(): void
+    {
+        $patientUser = $this->userWithRole('patient');
+        $patient = Patient::factory()->create([
+            'user_id' => $patientUser->id,
+            'nationality' => null,
+        ]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
+
+        $this->actingAs($patientUser)->get(route('patients.profile'))
+            ->assertOk()
+            ->assertSee('value="Single"', false)
+            ->assertSee('value="Married"', false)
+            ->assertSee('value="Widowed"', false)
+            ->assertSee('value="Separated"', false)
+            ->assertSee('value="Annulled/Divorced"', false)
+            ->assertSee('>Annulled/Divorced</option>', false)
+            ->assertSee('name="nationality" value="Filipino"', false)
+            ->assertDontSee('name="data_privacy_consent"', false);
+
+        $this->actingAs($patientUser)->post(route('patients.profile.save'), [
+            'first_name' => $patient->first_name,
+            'last_name' => $patient->last_name,
+            'date_of_birth' => $patient->date_of_birth->toDateString(),
+            'sex' => $patient->sex,
+            'civil_status' => 'Annulled/Divorced',
+            'nationality' => 'Filipino',
+        ])->assertRedirect(route('dashboard'));
+
+        $this->assertSame('Annulled/Divorced', $patient->fresh()->civil_status);
+        $this->assertSame('Filipino', $patient->fresh()->nationality);
+
+        $this->actingAs($patientUser)->post(route('patients.profile.save'), [
+            'first_name' => '',
+            'last_name' => $patient->fresh()->last_name,
+            'date_of_birth' => $patient->fresh()->date_of_birth->toDateString(),
+            'sex' => $patient->fresh()->sex,
+            'nationality' => '',
+        ])->assertSessionHasErrors('first_name');
+
+        $this->get(route('patients.profile'))
+            ->assertOk()
+            ->assertSee('name="nationality" value="Filipino"', false);
+    }
+
+    public function test_patient_profile_shows_the_privacy_checkbox_when_consent_is_not_current(): void
+    {
+        $patientUser = $this->userWithRole('patient');
+        Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patientUser->patient, $patientUser);
+        config(['consents.types.DATA_PRIVACY.version' => '2.0']);
+        $this->withoutMiddleware(EnsureCurrentPrivacyAcceptance::class);
+
+        $this->actingAs($patientUser)->get(route('patients.profile'))
+            ->assertOk()
+            ->assertSee('name="data_privacy_consent"', false)
+            ->assertSee('type="checkbox" name="data_privacy_consent" value="1" required', false);
+
+        $this->post(route('patients.profile.save'), [
+            'first_name' => $patientUser->patient->first_name,
+            'last_name' => $patientUser->patient->last_name,
+            'date_of_birth' => $patientUser->patient->date_of_birth->toDateString(),
+            'sex' => $patientUser->patient->sex,
+        ])->assertSessionHasErrors('data_privacy_consent');
     }
 
     public function test_registration_staff_verifies_identifiers_and_identifier_changes_clear_verification(): void

@@ -380,7 +380,7 @@ class PatientController extends Controller
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'email' => ['nullable', 'email', 'max:255'],
-            'civil_status' => ['nullable', 'string', 'max:50'],
+            'civil_status' => ['nullable', 'in:Single,Married,Widowed,Separated,Annulled/Divorced'],
             'nationality' => ['nullable', 'string', 'max:100'],
             'allergies' => ['nullable', 'string', 'max:2000'],
             'address' => ['nullable', 'array'],
@@ -400,7 +400,7 @@ class PatientController extends Controller
             'emergency_contact.name' => ['nullable', 'string'],
             'emergency_contact.relationship' => ['nullable', 'string'],
             'emergency_contact.phone' => ['nullable', 'string', new PhilippineMobilePhone],
-            'data_privacy_consent' => $needsDataPrivacyConsent ? ['accepted'] : ['nullable', 'accepted'],
+            'data_privacy_consent' => $needsDataPrivacyConsent ? ['accepted'] : ['sometimes', 'accepted'],
         ]);
         if (isset($data['address'])) {
             $data['address'] = $this->addressDataset->withoutEmptySelection($data['address']);

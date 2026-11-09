@@ -89,7 +89,8 @@
                         credentials: 'same-origin',
                     });
                     if (!response.ok) {
-                        throw new Error(`Address data request failed (${response.status}).`);
+                        const payload = await response.json().catch(() => null);
+                        throw new Error(payload?.message || 'Address options could not be loaded. Please try again later.');
                     }
                     const payload = await response.json();
                     if (!payload.success || !Array.isArray(payload.data)) {

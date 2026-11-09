@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Services\PhilippineAddressDataset;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class PhilippineAddressDatasetTest extends TestCase
@@ -59,6 +62,28 @@ class PhilippineAddressDatasetTest extends TestCase
         }
 
         $this->getJson('/api/v1/address-data/philippines/regions')->assertTooManyRequests();
+    }
+
+    public function test_address_data_failure_is_logged_and_returns_a_clear_service_error(): void
+    {
+        $exception = new RuntimeException('Dataset file is unreadable.');
+        $dataset = Mockery::mock(PhilippineAddressDataset::class);
+        $dataset->shouldReceive('regions')->once()->andThrow($exception);
+        $this->app->instance(PhilippineAddressDataset::class, $dataset);
+        Log::spy();
+
+        $this->getJson('/api/v1/address-data/philippines/regions')
+            ->assertServiceUnavailable()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Address data is temporarily unavailable. Please try again later.',
+            ]);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with('Failed to load Philippine address dataset.', Mockery::on(
+                fn (array $context): bool => $context['exception'] === $exception
+            ));
     }
 
     public function test_address_selection_validation_supports_official_special_hierarchies(): void
