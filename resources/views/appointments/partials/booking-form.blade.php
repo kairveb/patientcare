@@ -4,7 +4,7 @@
     <div id="booking-modal-alert" class="hidden rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium text-slate-700">Patient *</label>
+        <label class="mb-1 block text-sm font-medium text-slate-700">Patient <span class="hims-required" aria-hidden="true">*</span></label>
         <select name="patient_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="">Select patient</option>
             @foreach ($patients as $patient)
@@ -15,7 +15,7 @@
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-            <label class="mb-1 block text-sm font-medium text-slate-700">Department *</label>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Department <span class="hims-required" aria-hidden="true">*</span></label>
             <select name="department_id" id="department" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
                 <option value="">Select department</option>
                 @foreach ($departments as $dept)
@@ -24,7 +24,7 @@
             </select>
         </div>
         <div>
-            <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Type *</label>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Type <span class="hims-required" aria-hidden="true">*</span></label>
             <select name="appointment_type_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
                 @foreach ($appointmentTypes as $type)
                     <option value="{{ $type->id }}">{{ $type->name }}</option>
@@ -34,7 +34,7 @@
     </div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium text-slate-700">Provider *</label>
+        <label class="mb-1 block text-sm font-medium text-slate-700">Provider <span class="hims-required" aria-hidden="true">*</span></label>
         <select name="provider_id" data-slot-provider required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="">Select provider</option>
             @foreach ($providers as $provider)
@@ -44,7 +44,7 @@
     </div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Date *</label>
+        <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Date <span class="hims-required" aria-hidden="true">*</span></label>
         <input type="date" name="appointment_date" data-slot-date required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
     </div>
 

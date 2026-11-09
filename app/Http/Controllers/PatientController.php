@@ -13,6 +13,8 @@ use App\Http\Requests\CompleteTemporaryIdentityRequest;
 use App\Http\Requests\MergePatientRequest;
 use App\Http\Requests\VerifyPatientIdentifierRequest;
 use App\Rules\PhilHealthNumber;
+use App\Rules\PatientIdentifierNumber;
+use App\Rules\PhilippinePostalCode;
 use App\Rules\PhilippineMobilePhone;
 use App\Services\AuditLogService;
 use App\Services\PatientConsentService;
@@ -94,10 +96,10 @@ class PatientController extends Controller
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
             'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100'],
-            'pwd_id_number' => ['nullable', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100'],
+            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -114,7 +116,7 @@ class PatientController extends Controller
             'address_province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_submunicipality' => ['nullable', 'string', 'max:150'],
             'address_submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_postal' => ['nullable', 'string', 'max:10'],
+            'address_postal' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_name' => ['nullable', 'string', 'max:150', 'regex:/^[\pL\s\'\-.]+$/u'],
             'emergency_relationship' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s\'\-.]+$/u'],
             'emergency_phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -125,7 +127,6 @@ class PatientController extends Controller
             'last_name.regex' => 'Last name may only contain letters, spaces, and basic punctuation.',
             'phone' => 'Contact number must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).',
             'emergency_phone' => 'Emergency contact number must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).',
-            'address_postal.regex' => 'Postal code must be exactly 4 digits.',
             'date_of_birth.before_or_equal' => 'Date of birth cannot be in the future.',
         ]);
         $addressSelection = $this->flatAddressSelection($data);
@@ -371,10 +372,10 @@ class PatientController extends Controller
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
             'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100'],
-            'pwd_id_number' => ['nullable', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100'],
+            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -395,7 +396,7 @@ class PatientController extends Controller
             'address.province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.submunicipality' => ['nullable', 'string'],
             'address.submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.postal_code' => ['nullable', 'string'],
+            'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
             'emergency_contact.name' => ['nullable', 'string'],
             'emergency_contact.relationship' => ['nullable', 'string'],

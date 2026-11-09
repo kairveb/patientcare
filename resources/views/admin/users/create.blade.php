@@ -42,12 +42,18 @@
             </div>
             <div>
                 <label for="password" class="mb-1 block text-sm font-medium text-slate-700">Temporary password</label>
-                <input id="password" name="password" type="password" required autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                <div class="password-field">
+                    <input id="password" name="password" type="password" required autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
+                </div>
                 <p class="mt-1 text-xs text-slate-500">At least 8 characters with upper/lowercase letters, a number, and a symbol.</p>
             </div>
             <div>
                 <label for="password_confirmation" class="mb-1 block text-sm font-medium text-slate-700">Confirm password</label>
-                <input id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                <div class="password-field">
+                    <input id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
+                </div>
             </div>
         </div>
 

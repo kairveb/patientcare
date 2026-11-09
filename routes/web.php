@@ -71,7 +71,7 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
             ->middleware('throttle:10,1')->name('patients.portal.privacy.requests.store');
         Route::get('patient-portal/privacy/requests/{dataSubjectRequest}', [PrivacyPortalController::class, 'showRequest'])->name('privacy.requests.show');
         Route::get('patient-portal/privacy/export.json', [PrivacyPortalController::class, 'jsonCopy'])->middleware('throttle:5,1')->name('patients.portal.privacy.export.json');
-        Route::get('patient-portal/privacy/export/print', [PrivacyPortalController::class, 'printableCopy'])->middleware('throttle:5,1')->name('patients.portal.privacy.export.print');
+        Route::get('patient-portal/privacy/export/print', [PrivacyPortalController::class, 'printableCopy'])->middleware('throttle:patient-data-print')->name('patients.portal.privacy.export.print');
         Route::get('doctors', [DoctorDirectoryController::class, 'index'])->name('doctors.index');
         Route::get('doctors/{provider}', [DoctorDirectoryController::class, 'show'])
             ->whereNumber('provider')

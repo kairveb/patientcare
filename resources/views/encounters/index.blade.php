@@ -187,7 +187,7 @@
 
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Patient *</label>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Patient <span class="hims-required" aria-hidden="true">*</span></label>
                             <select name="patient_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                                 <option value="">Select patient</option>
                                 @foreach ($patientOptions as $patient)
@@ -198,7 +198,7 @@
                         </div>
 
                         <div>
-                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Provider *</label>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Provider <span class="hims-required" aria-hidden="true">*</span></label>
                             <select name="provider_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                                 <option value="">Select provider</option>
                                 @foreach ($providers as $provider)
@@ -220,7 +220,7 @@
                         </div>
 
                         <div>
-                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Encounter Type *</label>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-700">Encounter Type <span class="hims-required" aria-hidden="true">*</span></label>
                             <select name="type" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                                 <option value="OUTPATIENT" @selected(old('type', 'OUTPATIENT') === 'OUTPATIENT')>Outpatient</option>
                                 <option value="TELEHEALTH" @selected(old('type') === 'TELEHEALTH')>Telehealth</option>

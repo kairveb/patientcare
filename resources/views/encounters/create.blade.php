@@ -13,7 +13,7 @@
         @csrf
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Patient *</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Patient <span class="hims-required" aria-hidden="true">*</span></label>
                 <select name="patient_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     <option value="">Select patient</option>
                     @foreach ($patients as $patient)
@@ -22,7 +22,7 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Provider *</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Provider <span class="hims-required" aria-hidden="true">*</span></label>
                 <select name="provider_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     <option value="">Select provider</option>
                     @foreach ($providers as $provider)
@@ -40,7 +40,7 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Encounter Type *</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Encounter Type <span class="hims-required" aria-hidden="true">*</span></label>
                 <select name="type" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     <option value="OUTPATIENT">Outpatient</option>
                     <option value="TELEHEALTH">Telehealth</option>

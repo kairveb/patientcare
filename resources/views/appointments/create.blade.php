@@ -23,7 +23,7 @@
         @csrf
 
         <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Patient *</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Patient <span class="hims-required" aria-hidden="true">*</span></label>
             @if (auth()->user()->hasRole('patient'))
                 <input type="hidden" name="patient_id" value="{{ $patients->first()->id }}">
                 <p class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ $patients->first()->full_name }} — {{ $patients->first()->mrn }}</p>
@@ -39,7 +39,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Department *</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Department <span class="hims-required" aria-hidden="true">*</span></label>
                 <select name="department_id" id="department" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     <option value="">Select department</option>
                     @foreach ($departments as $dept)
@@ -48,7 +48,7 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Appointment Type *</label>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Appointment Type <span class="hims-required" aria-hidden="true">*</span></label>
                 <select name="appointment_type_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     @foreach ($appointmentTypes as $type)
                         <option value="{{ $type->id }}" {{ old('appointment_type_id', $selectedAppointmentTypeId) == $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
@@ -58,7 +58,7 @@
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Provider *</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Provider <span class="hims-required" aria-hidden="true">*</span></label>
             <select name="provider_id" data-slot-provider required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                 <option value="">Select provider</option>
                 @foreach ($providers as $provider)
@@ -68,7 +68,7 @@
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Appointment Date *</label>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Appointment Date <span class="hims-required" aria-hidden="true">*</span></label>
             <input type="date" name="appointment_date" data-slot-date required value="{{ $selectedStartsAt?->format('Y-m-d') }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
         </div>
 

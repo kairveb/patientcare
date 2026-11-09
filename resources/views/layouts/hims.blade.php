@@ -300,6 +300,7 @@
     <script src="{{ asset('assets/js/core/theme-boot.js') }}"></script>
     <script src="{{ asset('assets/js/data/module-registry.js') }}"></script>
     <script src="{{ asset('assets/js/core/app-shell.js') }}"></script>
+    <script src="{{ asset('assets/js/core/password-toggle.js') }}"></script>
     <script>
         (() => {
             const warning = document.getElementById('idle-session-warning');

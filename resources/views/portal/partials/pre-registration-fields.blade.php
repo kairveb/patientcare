@@ -42,7 +42,7 @@
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-slate-700">First Name *</label>
+        <label class="mb-1.5 block text-sm font-medium text-slate-700">First Name <span class="hims-required" aria-hidden="true">*</span></label>
         <input type="text" name="first_name" value="{{ $firstNameValue }}" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
@@ -52,7 +52,7 @@
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-slate-700">Last Name *</label>
+        <label class="mb-1.5 block text-sm font-medium text-slate-700">Last Name <span class="hims-required" aria-hidden="true">*</span></label>
         <input type="text" name="last_name" value="{{ $lastNameValue }}" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
@@ -62,12 +62,12 @@
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-slate-700">Date of Birth *</label>
+        <label class="mb-1.5 block text-sm font-medium text-slate-700">Date of Birth <span class="hims-required" aria-hidden="true">*</span></label>
         <input type="date" name="date_of_birth" value="{{ $dateOfBirthValue }}" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-slate-700">Sex *</label>
+        <label class="mb-1.5 block text-sm font-medium text-slate-700">Sex <span class="hims-required" aria-hidden="true">*</span></label>
         <select name="sex" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
             <option value="">Select</option>
             <option value="Male" {{ $sexValue === 'Male' ? 'selected' : '' }}>Male</option>
@@ -102,17 +102,17 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">PhilHealth number</label>
-        <input type="text" name="philhealth_number" value="{{ $philhealthNumberValue }}" maxlength="30" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="philhealth_number" value="{{ $philhealthNumberValue }}" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Senior citizen ID number</label>
-        <input type="text" name="senior_id_number" value="{{ $seniorIdNumberValue }}" maxlength="100" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="senior_id_number" value="{{ $seniorIdNumberValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">PWD ID number</label>
-        <input type="text" name="pwd_id_number" value="{{ $pwdIdNumberValue }}" maxlength="100" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="pwd_id_number" value="{{ $pwdIdNumberValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
@@ -122,7 +122,7 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">HMO member ID</label>
-        <input type="text" name="hmo_member_id" value="{{ $hmoMemberIdValue }}" maxlength="100" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="hmo_member_id" value="{{ $hmoMemberIdValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
@@ -186,7 +186,7 @@
 
     <div class="md:col-span-2">
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Postal Code</label>
-        <input type="text" name="address_postal" value="{{ $addressPostalValue }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="address_postal" value="{{ $addressPostalValue }}" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" data-digits-only class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div class="md:col-span-2">

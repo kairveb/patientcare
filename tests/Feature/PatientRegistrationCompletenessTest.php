@@ -40,7 +40,7 @@ class PatientRegistrationCompletenessTest extends TestCase
             'sex' => 'Female',
             'religion' => 'Christian',
             'occupation' => 'Teacher',
-            'philhealth_number' => '12-345678901-2',
+            'philhealth_number' => '12 345678901 2',
             'senior_id_number' => 'SENIOR-123',
             'pwd_id_number' => 'PWD-123',
             'hmo_name' => 'Example HMO',
@@ -48,6 +48,11 @@ class PatientRegistrationCompletenessTest extends TestCase
             'guarantor_name' => 'Guarantor Person',
             'guarantor_relationship' => 'Sibling',
             'guarantor_contact' => '09123456789',
+            'emergency_contact' => [
+                'name' => 'Emergency Contact',
+                'relationship' => 'Sibling',
+                'phone' => '+639123456789',
+            ],
             'address' => [
                 'region' => 'National Capital Region (NCR)',
                 'region_psgc_code' => '1300000000',
@@ -55,16 +60,17 @@ class PatientRegistrationCompletenessTest extends TestCase
                 'city_psgc_code' => '1381300000',
                 'barangay' => 'Bahay Toro',
                 'barangay_psgc_code' => '1381300012',
+                'postal_code' => '1100',
             ],
             'data_privacy_consent' => true,
         ])->assertCreated()
-            ->assertJsonPath('data.philhealth_number', '12-345678901-2')
+            ->assertJsonPath('data.philhealth_number', '12 345678901 2')
             ->assertJsonPath('data.hmo_member_id', 'MEMBER-123')
             ->assertJsonPath('data.religion', 'Christian');
 
         $patient = Patient::findOrFail($response->json('data.id'));
-        $this->assertSame('12-345678901-2', $patient->philhealth_number);
-        $this->assertNotSame('12-345678901-2', DB::table('patients')->where('id', $patient->id)->value('philhealth_number'));
+        $this->assertSame('12 345678901 2', $patient->philhealth_number);
+        $this->assertNotSame('12 345678901 2', DB::table('patients')->where('id', $patient->id)->value('philhealth_number'));
         $this->assertSame('MEMBER-123', $patient->hmo_member_id);
         $this->assertSame('1381300012', $patient->primaryAddress()->barangay_psgc_code);
 
@@ -136,20 +142,127 @@ class PatientRegistrationCompletenessTest extends TestCase
             'last_name' => 'PhilHealth',
             'date_of_birth' => '1990-04-12',
             'sex' => 'Female',
-            'philhealth_number' => '12345',
+            'philhealth_number' => 'gsgahkjsj',
             'data_privacy_consent' => true,
         ];
 
         $this->actingAs($registration)->postJson('/api/v1/patients', $patientData)
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('philhealth_number');
+            ->assertJsonValidationErrors('philhealth_number')
+            ->assertJsonPath(
+                'errors.philhealth_number.0',
+                'The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.'
+            );
         $this->assertDatabaseMissing('patients', ['first_name' => 'Invalid']);
+
+        $this->actingAs($registration)->postJson('/api/v1/patients', [
+            ...$patientData,
+            'philhealth_number' => '123456789012',
+            'senior_id_number' => "SC-123\u{0007}",
+            'pwd_id_number' => 'PWD-123',
+            'hmo_member_id' => 'HMO-123',
+            'guarantor_contact' => '555',
+            'emergency_contact' => ['phone' => '555'],
+            'address' => ['postal_code' => 'AB12'],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'senior_id_number',
+                'address.postal_code',
+                'guarantor_contact',
+                'emergency_contact.phone',
+            ]);
+
+        $this->actingAs($registration)->postJson('/api/v1/patients', [
+            ...$patientData,
+            'philhealth_number' => '123456789012',
+            'senior_id_number' => 'SC-2026/01',
+            'pwd_id_number' => 'PWD #44-7',
+            'hmo_member_id' => 'HMO/ABC-123',
+            'address' => [
+                'region' => 'National Capital Region (NCR)',
+                'region_psgc_code' => '1300000000',
+                'city' => 'Quezon City',
+                'city_psgc_code' => '1381300000',
+                'barangay' => 'Bahay Toro',
+                'barangay_psgc_code' => '1381300012',
+                'postal_code' => '1100',
+            ],
+        ])->assertCreated();
 
         $patient = Patient::factory()->create();
         $nurse = $this->userWithRole('nurse');
         $this->actingAs($nurse)->patchJson("/api/v1/patients/{$patient->id}", [
             'religion' => 'Not permitted',
         ])->assertForbidden();
+    }
+
+    public function test_profile_and_staff_registration_reject_non_digit_philhealth_and_postal_values(): void
+    {
+        $patientUser = $this->userWithRole('patient');
+        $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
+
+        $this->actingAs($patientUser)->post(route('patients.profile.save'), [
+        'first_name' => $patient->first_name,
+        'last_name' => $patient->last_name,
+        'date_of_birth' => $patient->date_of_birth->toDateString(),
+        'sex' => $patient->sex,
+        'philhealth_number' => 'gsgahkjsj',
+        'address' => ['postal_code' => 'AB12'],
+        ])->assertSessionHasErrors(['philhealth_number', 'address.postal_code']);
+
+        $registration = $this->userWithRole('registration');
+        $this->actingAs($registration)->from(route('patients.create'))->post(route('patients.store'), [
+        'first_name' => 'New',
+        'last_name' => 'Patient',
+        'date_of_birth' => '1990-04-12',
+        'sex' => 'Female',
+        'philhealth_number' => 'gsgahkjsj',
+        'address_postal' => 'AB12',
+        'data_privacy_consent' => true,
+        ])->assertSessionHasErrors(['philhealth_number', 'address_postal']);
+    }
+
+    public function test_patient_api_update_uses_the_same_identifier_and_phone_validation(): void
+    {
+        $registration = $this->userWithRole('registration');
+        $patient = Patient::factory()->create();
+
+        $this->actingAs($registration)->patchJson("/api/v1/patients/{$patient->id}", [
+            'philhealth_number' => 'gsgahkjsj',
+            'senior_id_number' => "SC-123\u{0007}",
+            'address' => ['postal_code' => 'AB12'],
+            'emergency_contact' => ['phone' => '123'],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'philhealth_number',
+                'senior_id_number',
+                'address.postal_code',
+                'emergency_contact.phone',
+            ]);
+    }
+
+    public function test_profile_renders_digits_only_philhealth_and_postal_inputs_and_permissive_id_inputs(): void
+    {
+        $patientUser = $this->userWithRole('patient');
+        $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
+        $this->acceptRequiredPrivacyDocuments($patient, $patientUser);
+
+        $this->actingAs($patientUser)->get(route('patients.profile'))
+        ->assertOk()
+        ->assertSee('name="philhealth_number"', false)
+        ->assertSee('inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input', false)
+        ->assertSee('name="address[postal_code]"', false)
+        ->assertSee('pattern="[0-9]{4}" maxlength="4" data-digits-only', false)
+        ->assertSee('name="senior_id_number"', false)
+        ->assertSee('name="pwd_id_number"', false)
+        ->assertSee('name="hmo_member_id"', false);
+
+        $registration = $this->userWithRole('registration');
+        $this->actingAs($registration)->get(route('patients.index'))
+        ->assertOk()
+        ->assertSee('inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input', false)
+        ->assertSee('pattern="[0-9]{4}" maxlength="4" data-digits-only', false);
     }
 
     public function test_legacy_free_text_address_survives_unrelated_profile_edits(): void

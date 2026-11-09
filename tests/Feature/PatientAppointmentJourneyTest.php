@@ -171,6 +171,7 @@ class PatientAppointmentJourneyTest extends TestCase
             'status' => Waitlist::STATUS_OFFERED,
         ]);
         Notification::assertSentTo($patientUser, AppointmentJourneyNotification::class);
+        Notification::assertSentTo($patientUser, AppointmentJourneyNotification::class);
     }
 
     public function test_patient_booking_requires_approval_and_registration_can_confirm_or_reject(): void
@@ -196,7 +197,34 @@ class PatientAppointmentJourneyTest extends TestCase
 
         $this->assertSame(Appointment::STATUS_CONFIRMED, $first->fresh()->status);
         $this->assertSame(Appointment::STATUS_REJECTED, $second->fresh()->status);
-        Notification::assertSentTo($patientUser, AppointmentJourneyNotification::class);
+    }
+
+    public function test_patient_with_current_privacy_consent_can_book_without_reconsenting(): void
+    {
+        config(['appointments.requires_approval' => true]);
+        [$patientUser, $patient] = $this->patient();
+        $provider = Provider::factory()->create();
+        $slot = $this->slot($provider, now()->addDays(3)->setTime(9, 0));
+
+        $this->actingAs($patientUser)
+            ->get(route('appointments.create'))
+            ->assertOk()
+            ->assertDontSee('name="data_privacy_consent"', false);
+
+        $this->post(route('appointments.store'), [
+            'patient_id' => $patient->id,
+            'provider_id' => $provider->id,
+            'starts_at' => $slot->starts_at->toDateTimeString(),
+            'appointment_slot_id' => $slot->id,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'patient_id' => $patient->id,
+            'provider_id' => $provider->id,
+            'starts_at' => $slot->starts_at->toDateTimeString(),
+            'status' => Appointment::STATUS_PENDING,
+        ]);
+        $this->assertSame(AppointmentSlot::STATUS_BOOKED, $slot->fresh()->status);
     }
 
     public function test_disabling_approval_confirms_online_booking_and_staff_can_book_walk_in(): void

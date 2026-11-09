@@ -26,6 +26,7 @@
       <a class="underline" href="{{ route('privacy.terms') }}">Terms and Agreement</a>
     </footer>
     @stack('scripts')
+    <script src="{{ asset('assets/js/core/password-toggle.js') }}"></script>
     @vite('resources/js/auth.js')
   </body>
 </html>

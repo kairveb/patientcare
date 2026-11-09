@@ -91,7 +91,7 @@
                 @csrf
                 <input type="hidden" name="reservation_id" value="">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Select Bed *</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Select Bed <span class="hims-required" aria-hidden="true">*</span></label>
                     <select id="admission-bed-id" name="bed_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                         <option value="">Choose bed</option>
                         @foreach ($assignableBeds as $bed)
@@ -117,7 +117,7 @@
                 @csrf
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Destination Bed *</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Destination Bed <span class="hims-required" aria-hidden="true">*</span></label>
                         <select name="to_bed_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                             <option value="">Choose bed</option>
                             @foreach ($availableBeds as $bed)

@@ -47,7 +47,7 @@
     </div>
 
     <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1">Priority confirmation / override *</label>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Priority confirmation / override <span class="hims-required" aria-hidden="true">*</span></label>
         <select name="priority" id="priority_select" data-ai-suggested="{{ $assessment?->ai_suggested_level ?? '' }}" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
             <option value="">Select</option>
             <option value="Level 1" {{ $currentPriority === 'Level 1' ? 'selected' : '' }}>Level 1 — Critical</option>

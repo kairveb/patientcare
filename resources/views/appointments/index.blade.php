@@ -223,10 +223,10 @@
                             <form class="opd-vitals-form space-y-4" method="POST" action="{{ route('appointments.vitals.store', $apt) }}">
                                 @csrf
                                 <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-                                    <label class="text-sm text-slate-700">Height (cm) *
+                                    <label class="text-sm text-slate-700">Height (cm) <span class="hims-required" aria-hidden="true">*</span>
                                         <input type="number" name="height_cm" min="55" max="250" step="0.1" required value="{{ $intakeVitals?->height_cm }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                                     </label>
-                                    <label class="text-sm text-slate-700">Weight (kg) *
+                                    <label class="text-sm text-slate-700">Weight (kg) <span class="hims-required" aria-hidden="true">*</span>
                                         <input type="number" name="weight" min="1" max="300" step="0.1" required value="{{ $intakeVitals?->weight }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                                     </label>
                                     <label class="text-sm text-slate-700">BMI (calculated)

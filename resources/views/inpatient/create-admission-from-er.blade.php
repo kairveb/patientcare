@@ -21,7 +21,7 @@
                 </div>
 
                 <div>
-                    <label for="attending_provider_id" class="mb-1.5 block text-sm font-medium text-slate-700">Attending provider *</label>
+                    <label for="attending_provider_id" class="mb-1.5 block text-sm font-medium text-slate-700">Attending provider <span class="hims-required" aria-hidden="true">*</span></label>
                     <select id="attending_provider_id" name="attending_provider_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
                         <option value="">Select provider</option>
                         @foreach ($providers as $provider)

@@ -79,6 +79,54 @@ button[type="submit"]:hover,
   background: #111827;
 }
 
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  min-width: 0;
+  padding-right: 3rem;
+}
+
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear {
+  display: none;
+}
+
+.password-field input::-webkit-textfield-decoration-container,
+.password-field input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0.25rem;
+  bottom: 0;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-block: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #64748b;
+  box-shadow: none;
+  transform: none;
+}
+
+.password-toggle:hover,
+.password-toggle:focus,
+.password-toggle:focus-visible {
+  background: #f1f5f9;
+  color: #334155;
+  transform: none;
+}
+
 table {
   width: 100%;
   border-collapse: separate;

@@ -187,6 +187,24 @@ class PrivacyAndDataRightsTest extends TestCase
         ]);
     }
 
+    public function test_printable_copy_has_a_user_scoped_limit_and_a_friendly_limit_page(): void
+    {
+        $user = $this->patientUser();
+        $url = route('patients.portal.privacy.export.print');
+
+        for ($attempt = 0; $attempt < 30; $attempt++) {
+            $this->actingAs($user)->get($url)->assertOk();
+        }
+
+        $this->actingAs($user)
+            ->get($url)
+            ->assertStatus(429)
+            ->assertSee('Please wait before requesting another copy')
+            ->assertSee('Return to My Privacy');
+
+        $this->actingAs($this->patientUser())->get($url)->assertOk();
+    }
+
     public function test_staff_patient_record_view_is_logged_and_patient_access_list_is_scoped(): void
     {
         $patientUser = $this->patientUser();

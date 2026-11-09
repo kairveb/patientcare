@@ -167,7 +167,7 @@
                         <input type="number" name="pain_score" min="0" max="10" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Priority *</label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Priority <span class="hims-required" aria-hidden="true">*</span></label>
                         <select name="priority" id="priority_select" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                             <option value="">Select</option>
                             <option value="Level 1">Level 1 — Critical</option>

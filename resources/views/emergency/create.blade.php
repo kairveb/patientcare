@@ -76,7 +76,7 @@
                             </select>
                         </div>
                         <div class="md:col-span-2">
-                            <label class="mb-1 block text-sm font-medium text-slate-700">Chief complaint *</label>
+                            <label class="mb-1 block text-sm font-medium text-slate-700">Chief complaint <span class="hims-required" aria-hidden="true">*</span></label>
                             <textarea name="chief_complaint" required rows="3" maxlength="2000" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ old('chief_complaint') }}</textarea>
                         </div>
                     </div>

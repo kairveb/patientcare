@@ -7,6 +7,8 @@ use App\Models\Patient;
 use App\Models\PreArrivalProfile;
 use App\Rules\PhilHealthNumber;
 use App\Rules\PhilippineMobilePhone;
+use App\Rules\PatientIdentifierNumber;
+use App\Rules\PhilippinePostalCode;
 use App\Services\PatientService;
 use App\Services\PatientConsentService;
 use App\Services\PatientQrCodeService;
@@ -248,10 +250,10 @@ class PreRegistrationController extends Controller
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
             'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100'],
-            'pwd_id_number' => ['nullable', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100'],
+            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -268,7 +270,7 @@ class PreRegistrationController extends Controller
             'address_province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_submunicipality' => ['nullable', 'string', 'max:150'],
             'address_submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_postal' => ['nullable', 'string', 'max:10'],
+            'address_postal' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'allergies' => ['nullable', 'string', 'max:2000'],
             'emergency_name' => ['nullable', 'string', 'max:150'],
             'emergency_phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],

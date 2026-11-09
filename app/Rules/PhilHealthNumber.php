@@ -13,13 +13,19 @@ class PhilHealthNumber implements ValidationRule
             return;
         }
 
-        $number = (string) $value;
-        $digits = str_replace('-', '', $number);
+        if (! is_string($value)) {
+            $fail('The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.');
 
-        if (! preg_match('/^\d+(?:-\d+)*$/', $number)
+            return;
+        }
+
+        $number = $value;
+        $digits = str_replace(['-', ' '], '', $number);
+
+        if (! preg_match('/^[0-9 -]+$/', $number)
             || strlen($digits) !== 12
-            || substr_count($number, '-') > 2) {
-            $fail('The :attribute field must contain 12 digits; dashes are optional.');
+        ) {
+            $fail('The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.');
         }
     }
 }

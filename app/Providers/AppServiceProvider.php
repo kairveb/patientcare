@@ -130,6 +130,22 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($key);
         });
+
+        RateLimiter::for('patient-data-print', function (Request $request) {
+            $user = $request->user();
+            $key = $user
+                ? "patient-data-print:user:{$user->id}:printable-copy"
+                : 'patient-data-print:ip:'.$request->ip().':printable-copy';
+
+            return Limit::perMinute(30)
+                ->by($key)
+                ->response(fn (Request $request, array $headers) => response()->view(
+                    'errors.print-copy-rate-limited',
+                    [],
+                    429,
+                    $headers
+                ));
+        });
     }
 
     /**

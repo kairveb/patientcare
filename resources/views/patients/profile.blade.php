@@ -91,17 +91,17 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">PhilHealth number</label>
-                    <input type="text" name="philhealth_number" value="{{ old('philhealth_number', $patient->philhealth_number) }}" maxlength="30" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="philhealth_number" value="{{ old('philhealth_number', $patient->philhealth_number) }}" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Senior citizen ID number</label>
-                    <input type="text" name="senior_id_number" value="{{ old('senior_id_number', $patient->senior_id_number) }}" maxlength="100" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="senior_id_number" value="{{ old('senior_id_number', $patient->senior_id_number) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">PWD ID number</label>
-                    <input type="text" name="pwd_id_number" value="{{ old('pwd_id_number', $patient->pwd_id_number) }}" maxlength="100" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="pwd_id_number" value="{{ old('pwd_id_number', $patient->pwd_id_number) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
@@ -111,7 +111,7 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">HMO member ID</label>
-                    <input type="text" name="hmo_member_id" value="{{ old('hmo_member_id', $patient->hmo_member_id) }}" maxlength="100" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="hmo_member_id" value="{{ old('hmo_member_id', $patient->hmo_member_id) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
@@ -169,7 +169,7 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Postal code</label>
-                    <input type="text" name="address[postal_code]" value="{{ old('address.postal_code', $address->postal_code ?? '') }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="address[postal_code]" value="{{ old('address.postal_code', $address->postal_code ?? '') }}" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" data-digits-only class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
             </div>
         </div>

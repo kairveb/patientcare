@@ -7,7 +7,9 @@ use App\Http\Requests\CompleteTemporaryIdentityRequest;
 use App\Http\Requests\MergePatientRequest;
 use App\Models\Patient;
 use App\Rules\PhilHealthNumber;
+use App\Rules\PatientIdentifierNumber;
 use App\Rules\PhilippineMobilePhone;
+use App\Rules\PhilippinePostalCode;
 use App\Services\AuditLogService;
 use App\Services\PatientMergeService;
 use App\Services\PatientQrCodeService;
@@ -74,10 +76,10 @@ class PatientApiController extends Controller
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
             'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100'],
-            'pwd_id_number' => ['nullable', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100'],
+            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -98,7 +100,7 @@ class PatientApiController extends Controller
             'address.province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.submunicipality' => ['nullable', 'string'],
             'address.submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.postal_code' => ['nullable', 'string'],
+            'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
             'emergency_contact.name' => ['nullable', 'string'],
             'emergency_contact.relationship' => ['nullable', 'string'],
@@ -243,10 +245,10 @@ class PatientApiController extends Controller
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
             'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100'],
-            'pwd_id_number' => ['nullable', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100'],
+            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -267,8 +269,11 @@ class PatientApiController extends Controller
             'address.submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.barangay' => ['nullable', 'string', 'max:150'],
             'address.barangay_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.postal_code' => ['nullable', 'string', 'max:20'],
+            'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
+            'emergency_contact.name' => ['nullable', 'string', 'max:150'],
+            'emergency_contact.relationship' => ['nullable', 'string', 'max:100'],
+            'emergency_contact.phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
         ]);
         if (isset($data['address'])) {
             $data['address'] = $this->addressDataset->withoutEmptySelection($data['address']);

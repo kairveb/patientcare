@@ -195,7 +195,7 @@
                     @csrf
 
                     <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-700">Patient *</label>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">Patient <span class="hims-required" aria-hidden="true">*</span></label>
                         <select name="patient_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                             <option value="">Select patient</option>
                             @foreach (App\Models\Patient::orderBy('last_name')->get() as $patient)
@@ -206,7 +206,7 @@
                     </div>
 
                     <div>
-                        <label class="mb-1.5 block text-sm font-medium text-slate-700">Attending Provider *</label>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">Attending Provider <span class="hims-required" aria-hidden="true">*</span></label>
                         <select name="attending_provider_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                             <option value="">Select provider</option>
                             @foreach (App\Models\Provider::where('active', true)->get() as $provider)

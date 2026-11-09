@@ -2,20 +2,6 @@
   const form = document.getElementById("login-form");
   const error = document.getElementById("login-error");
 
-  document.querySelectorAll("[data-password-toggle]").forEach((passwordToggle) => {
-    const password = passwordToggle.closest(".password-field")?.querySelector("input");
-    if (!password) return;
-
-    passwordToggle.addEventListener("click", () => {
-      const show = password.type === "password";
-      password.type = show ? "text" : "password";
-      passwordToggle.setAttribute("aria-pressed", String(show));
-      passwordToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
-      const icon = passwordToggle.querySelector("i");
-      if (icon) icon.className = `ph ${show ? "ph-eye-slash" : "ph-eye"}`;
-    });
-  });
-
   form?.addEventListener("submit", (event) => {
     if (!form.checkValidity()) {
       event.preventDefault();

@@ -38,7 +38,7 @@
             <p class="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">Patient: {{ $patients->first()->full_name }} — {{ $patients->first()->mrn }}</p>
         @else
             <div>
-                <label for="patient_id" class="mb-1 block text-sm font-medium text-slate-700">Patient *</label>
+                <label for="patient_id" class="mb-1 block text-sm font-medium text-slate-700">Patient <span class="hims-required" aria-hidden="true">*</span></label>
                 <select id="patient_id" name="patient_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="">Select patient</option>
                     @foreach ($patients as $patient)
@@ -49,12 +49,12 @@
         @endif
 
         <div>
-            <label for="age" class="mb-1 block text-sm font-medium text-slate-700">Age (years) *</label>
+            <label for="age" class="mb-1 block text-sm font-medium text-slate-700">Age (years) <span class="hims-required" aria-hidden="true">*</span></label>
             <input id="age" name="age" type="number" min="0" max="120" required value="{{ old('age') }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
         </div>
 
         <div>
-            <label for="symptoms" class="mb-1 block text-sm font-medium text-slate-700">Symptoms *</label>
+            <label for="symptoms" class="mb-1 block text-sm font-medium text-slate-700">Symptoms <span class="hims-required" aria-hidden="true">*</span></label>
             <textarea id="symptoms" name="symptoms" rows="4" required minlength="3" maxlength="2000" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Describe symptoms, separated by commas or new lines">{{ old('symptoms') }}</textarea>
         </div>
 

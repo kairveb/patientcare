@@ -287,16 +287,16 @@
                 @endif
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="prescription-medication" class="block text-sm font-medium text-slate-700 mb-1">Medication *</label>
+                        <label for="prescription-medication" class="block text-sm font-medium text-slate-700 mb-1">Medication <span class="hims-required" aria-hidden="true">*</span></label>
                             <input id="prescription-medication" name="medication_name" value="{{ old('medication_name') }}" required maxlength="255" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     </div>
                     <div>
-                        <label for="prescription-dosage" class="block text-sm font-medium text-slate-700 mb-1">Dosage *</label>
+                        <label for="prescription-dosage" class="block text-sm font-medium text-slate-700 mb-1">Dosage <span class="hims-required" aria-hidden="true">*</span></label>
                             <input id="prescription-dosage" name="dosage" value="{{ old('dosage') }}" required maxlength="255" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
                     </div>
                 </div>
                 <div>
-                    <label for="prescription-instructions" class="block text-sm font-medium text-slate-700 mb-1">Instructions *</label>
+                    <label for="prescription-instructions" class="block text-sm font-medium text-slate-700 mb-1">Instructions <span class="hims-required" aria-hidden="true">*</span></label>
                         <textarea id="prescription-instructions" name="instructions" required maxlength="5000" rows="3" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('instructions') }}</textarea>
                 </div>
                 <button type="submit" class="px-6 py-2.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save Prescription</button>
@@ -331,12 +331,12 @@
                 <div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Please complete all required clinical documentation. {{ $errors->first() }}</div>
             @endif
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">History of Present Illness *</label><textarea name="history_of_present_illness" required maxlength="30000" rows="3" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('history_of_present_illness', $encounter->history_of_present_illness) }}</textarea></div>
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">Physical Examination *</label><textarea name="physical_examination" required maxlength="30000" rows="3" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('physical_examination', $encounter->physical_examination) }}</textarea></div>
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis — ICD-10 Code *</label><input name="primary_diagnosis_code" required maxlength="20" value="{{ old('primary_diagnosis_code', $encounter->primary_diagnosis_code) }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis Description *</label><input name="primary_diagnosis_description" required maxlength="255" value="{{ old('primary_diagnosis_description', $encounter->primary_diagnosis_description) }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">Assessment *</label><textarea name="assessment" required maxlength="30000" rows="2" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('assessment', $encounter->assessment) }}</textarea></div>
-                <div><label class="block text-sm font-medium text-slate-700 mb-1">Plan *</label><textarea name="plan" required maxlength="30000" rows="2" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('plan', $encounter->plan) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">History of Present Illness <span class="hims-required" aria-hidden="true">*</span></label><textarea name="history_of_present_illness" required maxlength="30000" rows="3" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('history_of_present_illness', $encounter->history_of_present_illness) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Physical Examination <span class="hims-required" aria-hidden="true">*</span></label><textarea name="physical_examination" required maxlength="30000" rows="3" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('physical_examination', $encounter->physical_examination) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis — ICD-10 Code <span class="hims-required" aria-hidden="true">*</span></label><input name="primary_diagnosis_code" required maxlength="20" value="{{ old('primary_diagnosis_code', $encounter->primary_diagnosis_code) }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis Description <span class="hims-required" aria-hidden="true">*</span></label><input name="primary_diagnosis_description" required maxlength="255" value="{{ old('primary_diagnosis_description', $encounter->primary_diagnosis_description) }}" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Assessment <span class="hims-required" aria-hidden="true">*</span></label><textarea name="assessment" required maxlength="30000" rows="2" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('assessment', $encounter->assessment) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Plan <span class="hims-required" aria-hidden="true">*</span></label><textarea name="plan" required maxlength="30000" rows="2" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">{{ old('plan', $encounter->plan) }}</textarea></div>
             </div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Follow-up Date</label><input type="date" name="follow_up_date" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg md:w-64"></div>
             <button type="submit" class="px-6 py-2.5 text-sm bg-green-600 text-white rounded-lg">Complete</button>
