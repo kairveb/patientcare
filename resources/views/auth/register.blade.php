@@ -63,11 +63,12 @@
                             <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
                         </div>
                         @error('password')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
-                        <ul id="password-requirements" class="mt-3 space-y-1 text-sm" aria-live="polite">
+                        <ul id="password-requirements" class="auth-password-requirements" aria-live="polite">
                             <template x-for="requirement in requirements" :key="requirement.label">
-                                <li class="flex justify-between gap-3" :class="requirement.met ? 'text-emerald-700' : 'text-slate-500'">
-                                    <span x-text="requirement.label"></span>
-                                    <span class="font-medium" x-text="requirement.met ? 'Met' : 'Missing'"></span>
+                                <li class="auth-password-requirement" :class="requirement.met ? 'is-met' : 'is-missing'">
+                                    <span class="auth-password-requirement-indicator" aria-hidden="true" x-text="requirement.met ? '✓' : '•'"></span>
+                                    <span class="auth-password-requirement-label" x-text="requirement.label"></span>
+                                    <span class="auth-password-requirement-status" x-text="requirement.met ? 'Met' : 'Missing'"></span>
                                 </li>
                             </template>
                         </ul>
@@ -82,14 +83,14 @@
                         @error('password_confirmation')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-                        <label class="flex items-start gap-3">
-                            <input type="checkbox" name="privacy_notice_accepted" value="1" required @checked(old('privacy_notice_accepted')) class="mt-1">
+                    <div class="registration-consents">
+                        <label class="registration-consent">
+                            <input class="registration-consent-checkbox" type="checkbox" name="privacy_notice_accepted" value="1" required @checked(old('privacy_notice_accepted'))>
                             <span>I have read and acknowledge the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.notice') }}" target="_blank" rel="noopener">Privacy Notice</a> (version {{ config('privacy.notice_version') }}).</span>
                         </label>
                         @error('privacy_notice_accepted')<p class="text-red-700">{{ $message }}</p>@enderror
-                        <label class="flex items-start gap-3">
-                            <input type="checkbox" name="terms_accepted" value="1" required @checked(old('terms_accepted')) class="mt-1">
+                        <label class="registration-consent">
+                            <input class="registration-consent-checkbox" type="checkbox" name="terms_accepted" value="1" required @checked(old('terms_accepted'))>
                             <span>I have read and agree to the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.terms') }}" target="_blank" rel="noopener">Terms and Agreement</a> (version {{ config('privacy.terms_version') }}).</span>
                         </label>
                         @error('terms_accepted')<p class="text-red-700">{{ $message }}</p>@enderror
