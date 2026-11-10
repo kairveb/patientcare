@@ -11,10 +11,10 @@
 
     <section class="rounded-xl border border-slate-200 bg-white p-6">
         <h2 class="mb-4 font-semibold text-slate-900">Add a rate</h2>
-        <form method="POST" action="{{ route('billing.rates.store') }}" class="grid gap-4 md:grid-cols-2">
+        <form method="POST" action="{{ route('billing.rates.store') }}" class="grid items-end gap-4 md:grid-cols-2">
             @csrf
             <label class="text-sm">Charge code
-                <input name="charge_code" value="{{ old('charge_code') }}" placeholder="encounter:OUTPATIENT" required class="mt-1 w-full rounded border-slate-300">
+                <input name="charge_code" value="{{ old('charge_code') }}" maxlength="120" placeholder="OUTPATIENT, LAB-CBC, XRAY_CHEST" required class="mt-1 w-full rounded border-slate-300">
             </label>
             <label class="text-sm">Category
                 <select name="category" required class="mt-1 w-full rounded border-slate-300">
@@ -28,11 +28,11 @@
                 <input name="unit_amount" type="number" min="0.01" step="0.01" required class="mt-1 w-full rounded border-slate-300">
             </label>
             <input type="hidden" name="currency" value="PHP">
-            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="active" value="1" checked> Active</label>
-            <div><button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Create rate</button></div>
+            <div class="flex min-h-11 items-center justify-between gap-4 md:col-span-2">
+                <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="active" value="1" checked> Active</label>
+                <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Create rate</button>
+            </div>
         </form>
-        @error('charge_code')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
-        @error('unit_amount')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
     </section>
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">

@@ -215,7 +215,14 @@ class CareRequestWorkflowTest extends TestCase
             'description' => 'Chest X-ray',
             'urgency' => 'urgent',
         ])->assertForbidden();
-        $this->get(route('care-requests.index'))->assertOk();
+
+        foreach ([$doctorWithoutPermission, $this->userWithRole('registration')] as $user) {
+            $this->actingAs($user)->get(route('care-requests.index'))
+                ->assertOk()
+                ->assertSee('hims-filter-bar')
+                ->assertSee('name="type"', false)
+                ->assertSee('name="urgency"', false);
+        }
     }
 
     private function doctor(): array

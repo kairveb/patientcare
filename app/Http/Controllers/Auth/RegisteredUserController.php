@@ -39,7 +39,7 @@ class RegisteredUserController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'privacy_notice_accepted' => ['accepted'],
+            'data_privacy_consent' => ['accepted'],
             'terms_accepted' => ['accepted'],
             'password' => [
                 'required',

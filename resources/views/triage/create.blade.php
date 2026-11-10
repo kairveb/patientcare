@@ -33,24 +33,24 @@
                         <select name="patient_id" id="patient_id" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                             <option value="">Select patient</option>
                             @foreach ($patients as $patient)
-                                <option value="{{ $patient->id }}">{{ $patient->full_name }} — {{ $patient->mrn }}</option>
+                                <option value="{{ $patient->id }}" @selected(old('patient_id') == $patient->id)>{{ $patient->full_name }} — {{ $patient->mrn }}</option>
                             @endforeach
                         </select>
                     </div>
 
                     <div class="md:col-span-2">
                         <label for="chief_complaint" class="mb-1.5 block text-sm font-medium text-slate-700">Chief complaint</label>
-                        <textarea name="chief_complaint" id="chief_complaint" rows="3" required placeholder="e.g. Difficulty breathing and chest pain" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"></textarea>
+                        <textarea name="chief_complaint" id="chief_complaint" rows="3" required placeholder="e.g. Difficulty breathing and chest pain" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">{{ old('chief_complaint') }}</textarea>
                     </div>
 
                     <div class="md:col-span-2">
                         <label for="symptoms" class="mb-1.5 block text-sm font-medium text-slate-700">Symptoms</label>
-                        <input name="symptoms" id="symptoms" type="text" placeholder="e.g. chest pain, shortness of breath, fever" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
+                        <input name="symptoms" id="symptoms" type="text" value="{{ old('symptoms') }}" placeholder="e.g. chest pain, shortness of breath, fever" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                     </div>
 
                     <div>
                         <label for="pain_score" class="mb-1.5 block text-sm font-medium text-slate-700">Pain score</label>
-                        <input name="pain_score" id="pain_score" type="number" min="0" max="10" value="0" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
+                        <input name="pain_score" id="pain_score" type="number" min="0" max="10" value="{{ old('pain_score', 0) }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                     </div>
 
                     <div>
@@ -60,7 +60,7 @@
 
                     <div>
                         <label for="blood_pressure" class="mb-1.5 block text-sm font-medium text-slate-700">Blood pressure</label>
-                        <input name="blood_pressure" id="blood_pressure" type="text" placeholder="120/80" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
+                        <input name="blood_pressure" id="blood_pressure" type="text" value="{{ old('blood_pressure') }}" placeholder="120/80" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100">
                     </div>
 
                     <div>
@@ -112,7 +112,6 @@
                     <button type="button" id="clinical-override" class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-200">Clinical override</button>
                 </div>
 
-                <input type="hidden" name="ai_confirmed" id="ai_confirmed" value="0">
                 <input type="hidden" name="priority_override" id="priority_override" value="">
                 <input type="hidden" name="override_reason" id="override_reason" value="">
                 <div id="override-reason-field" class="mt-4 hidden">
@@ -122,7 +121,7 @@
                 </div>
 
                 <label class="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <input type="checkbox" id="ai-confirmed-toggle" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <input type="checkbox" id="ai-confirmed-toggle" name="ai_confirmed" value="1" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                     <span>I confirm the recommended priority, or I have applied a clinical override and documented the reason.</span>
                 </label>
 
@@ -195,7 +194,6 @@
         const overrideNotesField = document.getElementById('override-notes');
         const overrideLevelField = document.getElementById('override-level');
         const aiConfirmedToggle = document.getElementById('ai-confirmed-toggle');
-        const aiConfirmedField = document.getElementById('ai_confirmed');
         const priorityOverrideField = document.getElementById('priority_override');
         const overrideReasonField = document.getElementById('override_reason');
         const overrideReasonDisplay = document.getElementById('override_reason_display');
@@ -225,7 +223,6 @@
         }
 
         function syncAiConfirmationState(checked) {
-            if (aiConfirmedField) aiConfirmedField.value = checked ? '1' : '0';
             if (aiConfirmedToggle) aiConfirmedToggle.checked = checked;
         }
 

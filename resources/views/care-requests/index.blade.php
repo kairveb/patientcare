@@ -7,9 +7,9 @@
 
 @section('content')
 <div class="space-y-5">
-    <form method="GET" action="{{ route('care-requests.index') }}" class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <form method="GET" action="{{ route('care-requests.index') }}" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
         <label class="text-sm font-medium text-slate-700">Type
-            <select name="type" class="mt-1 block rounded-lg border border-slate-300 px-3 py-2">
+            <select name="type" class="rounded-lg border border-slate-300 px-3 py-2">
                 <option value="">All types</option>
                 @foreach (['lab' => 'Laboratory', 'imaging' => 'Imaging', 'procedure' => 'Procedure'] as $value => $label)
                     <option value="{{ $value }}" @selected(($filters['type'] ?? '') === $value)>{{ $label }}</option>
@@ -17,7 +17,7 @@
             </select>
         </label>
         <label class="text-sm font-medium text-slate-700">Urgency
-            <select name="urgency" class="mt-1 block rounded-lg border border-slate-300 px-3 py-2">
+            <select name="urgency" class="rounded-lg border border-slate-300 px-3 py-2">
                 <option value="">All urgencies</option>
                 <option value="routine" @selected(($filters['urgency'] ?? '') === 'routine')>Routine</option>
                 <option value="urgent" @selected(($filters['urgency'] ?? '') === 'urgent')>Urgent</option>

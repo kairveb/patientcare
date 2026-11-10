@@ -10,7 +10,7 @@
     <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
         These metrics support monitoring and future model improvement. They do not fine-tune a model and do not replace clinical judgment.
     </div>
-    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <form method="GET" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
         <label class="text-xs text-slate-600">Start date<input type="date" name="start" value="{{ $start }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <label class="text-xs text-slate-600">End date<input type="date" name="end" value="{{ $end }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Apply filters</button>

@@ -16,7 +16,7 @@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
             <label class="mb-1 block text-sm font-medium text-slate-700">Department <span class="hims-required" aria-hidden="true">*</span></label>
-            <select name="department_id" id="department" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+            <select name="department_id" id="department" data-provider-department required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
                 <option value="">Select department</option>
                 @foreach ($departments as $dept)
                     <option value="{{ $dept->id }}">{{ $dept->name }}</option>
@@ -25,9 +25,9 @@
         </div>
         <div>
             <label class="mb-1 block text-sm font-medium text-slate-700">Appointment Type <span class="hims-required" aria-hidden="true">*</span></label>
-            <select name="appointment_type_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+            <select name="appointment_type_id" data-provider-appointment-type required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
                 @foreach ($appointmentTypes as $type)
-                    <option value="{{ $type->id }}">{{ $type->name }}</option>
+                    <option value="{{ $type->id }}" data-telehealth="{{ $type->telehealth ? '1' : '0' }}">{{ $type->name }}</option>
                 @endforeach
             </select>
         </div>
@@ -35,12 +35,13 @@
 
     <div>
         <label class="mb-1 block text-sm font-medium text-slate-700">Provider <span class="hims-required" aria-hidden="true">*</span></label>
-        <select name="provider_id" data-slot-provider required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
+        <select name="provider_id" data-slot-provider data-provider-select required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="">Select provider</option>
             @foreach ($providers as $provider)
-                <option value="{{ $provider->id }}">{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
+                <option value="{{ $provider->id }}" data-department-id="{{ $provider->department_id }}" data-accepts-virtual="{{ $provider->accepts_virtual ? '1' : '0' }}">{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
             @endforeach
         </select>
+        <p data-no-providers-message class="mt-2 hidden text-sm text-amber-700" role="status">No providers available for this department.</p>
     </div>
 
     <div>

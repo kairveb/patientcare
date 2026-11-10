@@ -16,7 +16,7 @@ class StoreProviderUnavailabilityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'provider_id' => ['required', 'integer', 'exists:providers,id'],
+            'provider_id' => ['required', 'integer', Rule::exists('providers', 'id')->where('active', true)],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'reason' => ['required', Rule::in([

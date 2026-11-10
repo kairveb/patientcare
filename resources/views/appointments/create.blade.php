@@ -3,7 +3,7 @@
 @section('title', 'Book Appointment')
 
 @section('content')
-<div class="max-w-3xl space-y-6">
+<div class="mx-auto max-w-4xl space-y-6">
     @if ($selectedSpecialtyName)
         <div class="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
             Triage suggestion: <strong>{{ $selectedSpecialtyName }}</strong>. Review the pre-selected department and provider, then choose an available appointment slot.
@@ -19,7 +19,7 @@
         </a>
     </div>
 
-    <form method="POST" action="{{ route('appointments.store') }}" class="bg-white rounded-xl border border-slate-200 p-6 space-y-4" data-appointment-slot-picker data-slots-url="{{ route('appointments.slots') }}">
+    <form method="POST" action="{{ route('appointments.store') }}" class="panel-card space-y-5 p-6" data-appointment-slot-picker data-slots-url="{{ route('appointments.slots') }}">
         @csrf
 
         <div>
@@ -40,7 +40,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Department <span class="hims-required" aria-hidden="true">*</span></label>
-                <select name="department_id" id="department" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
+                <select name="department_id" id="department" data-provider-department required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="">Select department</option>
                     @foreach ($departments as $dept)
                         <option value="{{ $dept->id }}" @selected(old('department_id', $selectedDepartmentId) == $dept->id)>{{ $dept->name }}</option>
@@ -49,9 +49,9 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Appointment Type <span class="hims-required" aria-hidden="true">*</span></label>
-                <select name="appointment_type_id" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
+                <select name="appointment_type_id" data-provider-appointment-type required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     @foreach ($appointmentTypes as $type)
-                        <option value="{{ $type->id }}" {{ old('appointment_type_id', $selectedAppointmentTypeId) == $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
+                        <option value="{{ $type->id }}" {{ old('appointment_type_id', $selectedAppointmentTypeId) == $type->id ? 'selected' : '' }} data-telehealth="{{ $type->telehealth ? '1' : '0' }}">{{ $type->name }}</option>
                     @endforeach
                 </select>
             </div>
@@ -59,12 +59,13 @@
 
         <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Provider <span class="hims-required" aria-hidden="true">*</span></label>
-            <select name="provider_id" data-slot-provider required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
+            <select name="provider_id" data-slot-provider data-provider-select required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <option value="">Select provider</option>
                 @foreach ($providers as $provider)
-                    <option value="{{ $provider->id }}" @selected(old('provider_id', $selectedProviderId) == $provider->id)>{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
+                    <option value="{{ $provider->id }}" data-department-id="{{ $provider->department_id }}" data-accepts-virtual="{{ $provider->accepts_virtual ? '1' : '0' }}" @selected(old('provider_id', $selectedProviderId) == $provider->id)>{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
                 @endforeach
             </select>
+            <p data-no-providers-message class="mt-2 hidden text-sm text-amber-700" role="status">No providers available for this department.</p>
         </div>
 
         <div>

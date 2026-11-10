@@ -31,15 +31,7 @@
                 'contact' => $contact,
             ])
 
-            @unless ($hasDataPrivacyConsent)
-                <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <label class="flex items-start gap-3 text-sm text-amber-950">
-                        <input type="checkbox" name="data_privacy_consent" value="1" required @checked(old('data_privacy_consent')) class="mt-1 rounded border-amber-400">
-                        <span><strong>{{ $consentTypes['DATA_PRIVACY']['title'] }} (v{{ $consentTypes['DATA_PRIVACY']['version'] }})</strong><br>{{ $consentTypes['DATA_PRIVACY']['text'] }}</span>
-                    </label>
-                    @error('data_privacy_consent')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
-                </div>
-            @endunless
+            <x-patient-consent :has-current-grant="$hasDataPrivacyConsent" class="mt-6" />
 
             <div class="mt-6 flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
                 <a href="{{ route('patients.portal') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Cancel</a>

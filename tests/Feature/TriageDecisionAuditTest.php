@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
+use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\TriageAssessment;
+use App\Models\TriageVital;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use App\Services\TriageService;
+use App\Support\TriageDecisionRules;
 use Tests\TestCase;
 
 class TriageDecisionAuditTest extends TestCase
@@ -102,6 +106,98 @@ class TriageDecisionAuditTest extends TestCase
         }
 
         $this->assertSame(0, TriageAssessment::count());
+    }
+
+    public function test_super_admin_web_triage_saves_symptoms_pain_blood_pressure_and_color_priority(): void
+    {
+        $admin = $this->userWithRole('super-admin');
+        $patient = $this->patient();
+        $this->actingAs($admin);
+
+        $payload = $this->triagePayload($patient, [
+            'chief_complaint' => 'Feeling unwell',
+            'symptoms' => 'dsadasd',
+            'pain_score' => 5,
+            'blood_pressure' => '80/23',
+            'priority' => 'Red',
+        ]);
+        if (TriageDecisionRules::normalizeLevel(app(TriageService::class)->score([
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Feeling unwell',
+            'symptoms' => ['dsadasd'],
+            'pain_score' => 5,
+            'vitals' => ['blood_pressure' => '80/23'],
+        ])['priority']) !== 'Emergency') {
+            $payload['override_reason'] = 'Clinical review confirmed emergency priority.';
+        }
+
+        $this->post(route('triage.store'), $payload)
+            ->assertRedirect();
+
+        $assessment = TriageAssessment::where('patient_id', $patient->id)->firstOrFail();
+        $this->assertSame(['dsadasd'], $assessment->symptoms);
+        $this->assertSame(5, $assessment->pain_score);
+        $this->assertSame('Level 1', $assessment->priority);
+        $this->assertSame('Emergency', $assessment->final_level);
+        $this->assertSame('80/23', TriageVital::where('triage_assessment_id', $assessment->id)->value('blood_pressure'));
+    }
+
+    public function test_nurse_api_triage_persists_the_same_clinical_inputs(): void
+    {
+        $nurse = $this->userWithRole('nurse');
+        $patient = $this->patient();
+        $visit = ErVisit::create([
+            'visit_number' => 'ER-API-'.Str::uuid(),
+            'patient_id' => $patient->id,
+            'arrived_at' => now(),
+            'arrival_method' => 'Walk-in',
+            'chief_complaint' => 'Feeling unwell',
+            'status' => ErVisit::STATUS_ARRIVED,
+        ]);
+        $payload = [
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Feeling unwell',
+            'symptoms' => ['dsadasd'],
+            'pain_score' => 5,
+            'vitals' => ['blood_pressure' => '80/23'],
+            'priority' => 'Red',
+            'ai_confirmed' => '1',
+        ];
+        if (TriageDecisionRules::normalizeLevel(app(TriageService::class)->score([
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Feeling unwell',
+            'symptoms' => ['dsadasd'],
+            'pain_score' => 5,
+            'vitals' => ['blood_pressure' => '80/23'],
+        ])['priority']) !== 'Emergency') {
+            $payload['override_reason'] = 'Clinical review confirmed emergency priority.';
+        }
+
+        $this->actingAs($nurse)->postJson("/api/v1/emergency/{$visit->id}/triage", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.priority', 'Level 1')
+            ->assertJsonPath('data.symptoms', ['dsadasd'])
+            ->assertJsonPath('data.pain_score', 5)
+            ->assertJsonPath('data.vitals.blood_pressure', '80/23');
+    }
+
+    public function test_triage_validation_errors_are_visible_after_redirect(): void
+    {
+        $nurse = $this->userWithRole('nurse');
+        $patient = $this->patient();
+
+        $response = $this->actingAs($nurse)
+            ->from(route('triage.create'))
+            ->followingRedirects()
+            ->post(route('triage.store'), [
+                'patient_id' => $patient->id,
+                'chief_complaint' => 'Cold follow-up',
+                'symptoms' => 'cold',
+                'pain_score' => 1,
+            ]);
+
+        $response->assertOk()
+            ->assertSee('accepted');
     }
 
     private function userWithRole(string $roleName): User

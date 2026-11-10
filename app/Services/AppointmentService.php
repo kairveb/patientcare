@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\AppointmentStatusHistory;
 use App\Models\AppointmentSlot;
 use App\Models\Patient;
+use App\Models\Provider;
 use App\Models\Waitlist;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,18 @@ class AppointmentService
      */
     public function book(array $data, ?int $userId = null): Appointment
     {
+        $provider = Provider::query()
+            ->whereKey($data['provider_id'])
+            ->where('active', true)
+            ->first();
+
+        if (! $provider || (filled($data['department_id'] ?? null)
+            && (int) $provider->department_id !== (int) $data['department_id'])) {
+            throw ValidationException::withMessages([
+                'provider_id' => ['Choose an active provider assigned to the selected department.'],
+            ]);
+        }
+
         if (Patient::withTrashed()
             ->whereKey($data['patient_id'])
             ->where('is_temporary_identity', true)

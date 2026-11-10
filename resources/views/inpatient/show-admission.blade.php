@@ -75,7 +75,7 @@
         @if ($admission->status === 'APPROVED')
         <div class="bg-white rounded-xl border border-slate-200 p-6">
             <h3 class="font-semibold text-slate-800 mb-3">Assign Bed</h3>
-            <form method="GET" action="{{ route('admissions.show', $admission) }}" class="mb-4 flex flex-wrap items-end gap-3">
+            <form method="GET" action="{{ route('admissions.show', $admission) }}" class="hims-filter-bar mb-4">
                 <div>
                     <label for="assignment-ward" class="mb-1 block text-sm font-medium text-slate-700">Filter beds by ward</label>
                     <select id="assignment-ward" name="ward_id" class="min-w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm">

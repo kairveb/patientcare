@@ -6,7 +6,7 @@
 
 @section('content')
 <div class="space-y-6">
-    <form method="GET" class="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
+    <form method="GET" class="hims-filter-bar hims-filter-bar--grid gap-3 rounded-2xl border bg-white p-4 shadow-sm">
         <input name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Doctor name" class="rounded-lg border-slate-300 text-sm" aria-label="Search doctor name">
         <select name="department_id" class="rounded-lg border-slate-300 text-sm" aria-label="Department">
             <option value="">All departments</option>

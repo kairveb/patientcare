@@ -28,7 +28,7 @@ class RegistrationTest extends TestCase
             'email' => 'test@example.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'privacy_notice_accepted' => '1',
+            'data_privacy_consent' => '1',
             'terms_accepted' => '1',
         ]);
 
@@ -53,7 +53,7 @@ class RegistrationTest extends TestCase
             'email' => 'verified@example.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-            'privacy_notice_accepted' => '1',
+            'data_privacy_consent' => '1',
             'terms_accepted' => '1',
         ])->assertRedirect(route('dashboard', absolute: false));
 

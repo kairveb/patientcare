@@ -37,6 +37,14 @@ Set `DB_CONNECTION=mariadb`, `BROADCAST_CONNECTION=null`, `QUEUE_CONNECTION=data
 7. Configure provider-managed database and object-storage backups, retention, and access controls; perform and record a restore test before any real patient data is stored. `DB_BACKUP_ENABLED=false` prevents the local `db:backup` task from being scheduled in production; it does not configure managed backups.
 8. Do not use `hims:demo-accounts`, `app:create-demo-staff`, or `DemoDataSeeder` for production demo provisioning; those legacy paths include Super Admin accounts or unsafe shared-password behavior. If synthetic demo data is explicitly required, run `php artisan app:seed-demo --force` only with `DEMO_MODE=true` supplied through the deployment's secret/environment facility. This creates four non-admin `@example.com` accounts and marked synthetic data; provide distinct account secrets with `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD`, or securely save the generated passwords shown once. Existing account passwords are not reset. To remove the marked records, run `php artisan app:purge-demo --force` with `DEMO_MODE=true`; the command reports and refuses to delete when unmarked records depend on demo data, requires an additional interactive confirmation, and never deletes audit logs. Review the resulting records and blockers before proceeding.
 
+   If synthetic appointment choices are specifically required, the optional provider seeder can be run after migrations and reference data are installed:
+
+   ```sh
+   php artisan db:seed --class='Database\Seeders\DemoProvidersAndSlotsSeeder' --force
+   ```
+
+   It creates only missing Cardiology, Pediatrics, and Orthopedics demo provider records, weekday schedules, and future appointment slots. Demo accounts use reserved `.invalid` email addresses and random, undisclosed passwords. The seeder is idempotent, does not delete or overwrite existing field values, and stops if a target department is inactive. Do not use these synthetic providers as real clinicians.
+
 The startup command is one foreground `supervisord -n` process managing Apache, `php artisan queue:work --tries=3 --timeout=60`, and `php artisan schedule:work`. Reverb is not started. Run only one instance of this combined container because each instance runs the scheduler. Platform behavior for Dockerfile builds, proxy CIDRs, managed DB TLS, object storage, health check routing, and serialized release tasks must be confirmed with the selected host; they have not been independently verified.
 
 The public pre-registration ticket and MFA enrollment QR codes are generated locally as SVG data URIs; no third-party QR image service is used by those flows.

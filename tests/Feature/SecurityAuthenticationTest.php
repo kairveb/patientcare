@@ -104,7 +104,7 @@ class SecurityAuthenticationTest extends TestCase
             'email' => 'new.patient@example.test',
             'password' => 'ValidPass1!',
             'password_confirmation' => 'DifferentPass1!',
-            'privacy_notice_accepted' => '1',
+            'data_privacy_consent' => '1',
             'terms_accepted' => '1',
         ])
             ->assertSessionHasErrors('password_confirmation')

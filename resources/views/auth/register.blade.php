@@ -84,11 +84,7 @@
                     </div>
 
                     <div class="registration-consents">
-                        <label class="registration-consent">
-                            <input class="registration-consent-checkbox" type="checkbox" name="privacy_notice_accepted" value="1" required @checked(old('privacy_notice_accepted'))>
-                            <span>I have read and acknowledge the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.notice') }}" target="_blank" rel="noopener">Privacy Notice</a> (version {{ config('privacy.notice_version') }}).</span>
-                        </label>
-                        @error('privacy_notice_accepted')<p class="text-red-700">{{ $message }}</p>@enderror
+                        <x-patient-consent class="registration-consent-block" />
                         <label class="registration-consent">
                             <input class="registration-consent-checkbox" type="checkbox" name="terms_accepted" value="1" required @checked(old('terms_accepted'))>
                             <span>I have read and agree to the <a class="font-semibold text-teal-800 underline" href="{{ route('privacy.terms') }}" target="_blank" rel="noopener">Terms and Agreement</a> (version {{ config('privacy.terms_version') }}).</span>

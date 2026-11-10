@@ -270,7 +270,7 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware(['can:triage-patients', 'throttle:30,1'])->group(function () {
             Route::post('/triage/score', [TriageApiController::class, 'score']);
-            Route::post('/emergency/{id}/triage', [TriageApiController::class, 'store'])->middleware('role:nurse,doctor');
+            Route::post('/emergency/{id}/triage', [TriageApiController::class, 'store'])->middleware('role:nurse,doctor,super-admin');
         });
         Route::middleware(['role:patient,registration,super-admin', 'throttle:30,1'])->group(function () {
             Route::post('/symptom-checks', [SymptomCheckerController::class, 'store']);

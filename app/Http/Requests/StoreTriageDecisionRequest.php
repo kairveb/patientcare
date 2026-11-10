@@ -14,7 +14,7 @@ class StoreTriageDecisionRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('nurse', 'doctor') ?? false;
+        return $this->user()?->hasRole('nurse', 'doctor', 'super-admin') ?? false;
     }
 
     public function rules(): array
@@ -22,11 +22,19 @@ class StoreTriageDecisionRequest extends FormRequest
         return [
             'patient_id' => ['nullable', 'exists:patients,id'],
             'chief_complaint' => ['nullable', 'string', 'max:500'],
-            'symptoms' => ['nullable'],
+            'symptoms' => [
+                'nullable',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! is_string($value) && ! is_array($value)) {
+                        $fail('Symptoms must be text or a list of symptom names.');
+                    }
+                },
+            ],
+            'symptoms.*' => ['string', 'max:255'],
             'pain_score' => ['nullable', 'integer', 'min:0', 'max:10'],
             'gcs' => ['nullable', 'integer', 'between:3,15'],
-            'priority' => ['nullable', 'in:Level 1,Level 2,Level 3,Level 4,Level 5,Emergency,Urgent,Prompt,Non-Urgent,Routine'],
-            'priority_override' => ['nullable', 'in:Level 1,Level 2,Level 3,Level 4,Level 5,Emergency,Urgent,Prompt,Non-Urgent,Routine'],
+            'priority' => ['nullable', 'in:Level 1,Level 2,Level 3,Level 4,Level 5,Emergency,Urgent,Prompt,Non-Urgent,Routine,Red,Yellow,Orange,Green'],
+            'priority_override' => ['nullable', 'in:Level 1,Level 2,Level 3,Level 4,Level 5,Emergency,Urgent,Prompt,Non-Urgent,Routine,Red,Yellow,Orange,Green'],
             'override_reason' => ['nullable', 'string'],
             'ai_confirmed' => ['accepted'],
             'notes' => ['nullable', 'string'],
@@ -92,12 +100,14 @@ class StoreTriageDecisionRequest extends FormRequest
         return $reason === '' ? null : $reason;
     }
 
+    public function normalizedSymptoms(): array
+    {
+        return $this->symptomList($this->validated()['symptoms'] ?? null);
+    }
+
     private function analyze(array $data): array
     {
-        $symptoms = $data['symptoms'] ?? [];
-        if (is_string($symptoms)) {
-            $symptoms = preg_split('/[,;\n]/', $symptoms) ?: [];
-        }
+        $symptoms = $this->symptomList($data['symptoms'] ?? null);
 
         $visit = $this->route('visit');
         if (! $visit instanceof ErVisit && $this->route('id')) {
@@ -132,9 +142,25 @@ class StoreTriageDecisionRequest extends FormRequest
         return app(TriageService::class)->score([
             'patient_id' => $data['patient_id'] ?? $visit?->patient_id,
             'chief_complaint' => $data['chief_complaint'] ?? $visit?->chief_complaint,
-            'symptoms' => array_values(array_filter(array_map('trim', $symptoms))),
+            'symptoms' => $symptoms,
             'pain_score' => $data['pain_score'] ?? 0,
             'vitals' => $vitals,
         ]);
+    }
+
+    private function symptomList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/[,;\n]/', $value) ?: [];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn ($symptom): string => trim((string) $symptom), $value),
+            static fn (string $symptom): bool => $symptom !== ''
+        ));
     }
 }

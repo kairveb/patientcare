@@ -382,12 +382,53 @@ const initializeAppointmentSlotPickers = () => {
     });
 };
 
+const initializeProviderDepartmentFilters = () => {
+    document.querySelectorAll('[data-appointment-slot-picker]').forEach((form) => {
+        const department = form.querySelector('[data-provider-department]');
+        const appointmentType = form.querySelector('[data-provider-appointment-type]');
+        const provider = form.querySelector('[data-provider-select]');
+        const emptyMessage = form.querySelector('[data-no-providers-message]');
+
+        if (!department || !provider || !emptyMessage) {
+            return;
+        }
+
+        const options = Array.from(provider.options).filter((option) => option.value !== '');
+        const updateProviders = () => {
+            const departmentId = department.value;
+            const isTelehealth = appointmentType?.selectedOptions[0]?.dataset.telehealth === '1';
+            let visibleCount = 0;
+
+            options.forEach((option) => {
+                const matchesDepartment = !departmentId || option.dataset.departmentId === departmentId;
+                const matchesAppointmentType = !isTelehealth || option.dataset.acceptsVirtual === '1';
+                option.hidden = !matchesDepartment || !matchesAppointmentType;
+                if (!option.hidden) visibleCount++;
+            });
+
+            if (provider.selectedOptions[0]?.hidden) {
+                provider.value = '';
+                provider.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            const noDepartmentProviders = Boolean(departmentId) && visibleCount === 0;
+            emptyMessage.hidden = !noDepartmentProviders;
+            provider.disabled = noDepartmentProviders;
+        };
+
+        department.addEventListener('change', updateProviders);
+        appointmentType?.addEventListener('change', updateProviders);
+        updateProviders();
+    });
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('input[data-phone-input]').forEach(enforcePhilippinePhoneInput);
     document.querySelectorAll('input[data-digits-only]').forEach((input) => enforceDigitOnlyInput(input, Number(input.maxLength) || 4));
     document.querySelectorAll('input[data-patient-identifier]').forEach(enforcePatientIdentifierInput);
     initializeRequiredAsterisks();
     initializeFilterPanels();
+    initializeProviderDepartmentFilters();
     initializeAppointmentSlotPickers();
     listenForEmergencyAlerts();
 });

@@ -41,10 +41,10 @@ class PrivacyAndDataRightsTest extends TestCase
         $payload = $this->registrationPayload();
 
         $this->post(route('register'), $payload)
-            ->assertSessionHasErrors(['privacy_notice_accepted', 'terms_accepted']);
+            ->assertSessionHasErrors(['data_privacy_consent', 'terms_accepted']);
         $this->assertDatabaseCount('users', 0);
 
-        $payload['privacy_notice_accepted'] = '1';
+        $payload['data_privacy_consent'] = '1';
         $payload['terms_accepted'] = '1';
         $this->post(route('register'), $payload)->assertRedirect(route('dashboard'));
 

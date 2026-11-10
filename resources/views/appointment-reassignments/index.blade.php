@@ -23,17 +23,21 @@
         <form method="POST" action="{{ route('provider-unavailabilities.store') }}" class="mt-4 grid gap-3 md:grid-cols-3">
             @csrf
             <label class="text-sm font-medium text-slate-700">Doctor
-                <select name="provider_id" required class="mt-1 w-full rounded border-slate-300">
+                <select name="provider_id" required @disabled($providers->isEmpty()) class="mt-1 w-full rounded border-slate-300">
+                    <option value="">Select doctor</option>
                     @foreach ($providers as $provider)
-                        <option value="{{ $provider->id }}" @selected(auth()->user()->provider?->id === $provider->id)>{{ $provider->full_name }} — {{ $provider->department?->name }}</option>
+                        <option value="{{ $provider->id }}" @selected((string) old('provider_id', auth()->user()->provider?->id) === (string) $provider->id)>{{ $provider->full_name }} — {{ $provider->department?->name }}</option>
                     @endforeach
                 </select>
+                @if ($providers->isEmpty())
+                    <span class="mt-1 block text-xs text-amber-700">No active doctors are available.</span>
+                @endif
             </label>
             <label class="text-sm font-medium text-slate-700">From
-                <input name="starts_at" type="datetime-local" required class="mt-1 w-full rounded border-slate-300">
+                <input name="starts_at" type="datetime-local" value="{{ old('starts_at') }}" required class="mt-1 w-full rounded border-slate-300">
             </label>
             <label class="text-sm font-medium text-slate-700">Until
-                <input name="ends_at" type="datetime-local" required class="mt-1 w-full rounded border-slate-300">
+                <input name="ends_at" type="datetime-local" value="{{ old('ends_at') }}" required class="mt-1 w-full rounded border-slate-300">
             </label>
             <label class="text-sm font-medium text-slate-700">Reason
                 <select name="reason" required class="mt-1 w-full rounded border-slate-300">
@@ -54,7 +58,7 @@
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b p-4">
             <div><h2 class="text-lg font-semibold text-slate-900">Reassignment cases</h2><p class="text-sm text-slate-500">{{ $cases->total() }} cases</p></div>
-            <form method="GET">
+            <form method="GET" class="hims-filter-bar hims-filter-bar--compact">
                 <label class="sr-only" for="status">Filter by status</label>
                 <select id="status" name="status" onchange="this.form.submit()" class="rounded border-slate-300 text-sm">
                     <option value="">All statuses</option>

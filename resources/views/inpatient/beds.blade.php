@@ -12,7 +12,7 @@
         <a href="{{ route('admissions.index') }}" class="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700">Admissions</a>
     </div>
 
-    <form method="GET" action="{{ route('beds.index') }}" class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <form method="GET" action="{{ route('beds.index') }}" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
         <div>
             <label for="bed-board-ward" class="mb-1 block text-sm font-medium text-slate-700">Filter by ward</label>
             <select id="bed-board-ward" name="ward_id" class="min-w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm">

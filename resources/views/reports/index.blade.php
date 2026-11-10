@@ -7,7 +7,7 @@
 
 @section('content')
 <div class="space-y-6">
-    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <form method="GET" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
         <label class="text-xs text-slate-600">Start date<input type="date" name="start" value="{{ request('start', today()->subDays(30)->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <label class="text-xs text-slate-600">End date<input type="date" name="end" value="{{ request('end', today()->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <label class="text-xs text-slate-600">Department<select name="department_id" class="mt-1 block rounded-lg border-slate-300 text-sm"><option value="">All departments</option>@foreach ($reportDepartments as $department)<option value="{{ $department->id }}" @selected((string) request('department_id') === (string) $department->id)>{{ $department->name }}</option>@endforeach</select></label>

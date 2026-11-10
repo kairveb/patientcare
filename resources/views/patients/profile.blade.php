@@ -209,15 +209,7 @@
             <textarea name="allergies" rows="4" class="w-full rounded-lg border border-slate-300 px-3 py-2">{{ old('allergies', $patient->allergies) }}</textarea>
         </div>
 
-        @unless ($hasDataPrivacyConsent)
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <label class="flex items-start gap-3 text-sm text-amber-950">
-                    <input type="checkbox" name="data_privacy_consent" value="1" required @checked(old('data_privacy_consent')) class="mt-1 rounded border-amber-400">
-                    <span><strong>{{ $consentTypes['DATA_PRIVACY']['title'] }} (v{{ $consentTypes['DATA_PRIVACY']['version'] }})</strong><br>{{ $consentTypes['DATA_PRIVACY']['text'] }}</span>
-                </label>
-                @error('data_privacy_consent')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
-            </div>
-        @endunless
+        <x-patient-consent :has-current-grant="$hasDataPrivacyConsent" class="p-5" />
 
         <div class="flex items-center justify-end gap-3">
             <a href="{{ route('dashboard') }}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Cancel</a>

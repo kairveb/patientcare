@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTriageDecisionRequest;
 use App\Models\ErVisit;
 use App\Services\TriageService;
+use App\Support\TriageDecisionRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -83,6 +84,7 @@ class TriageApiController extends Controller
     {
         $visit = ErVisit::findOrFail($id);
         $data = $request->validated();
+        $data['symptoms'] = $request->normalizedSymptoms();
 
         if (isset($data['vitals']['blood_pressure'])) {
             $data['vitals']['blood_pressure'] = $this->normaliseBloodPressureValue($data['vitals']['blood_pressure']);
@@ -91,13 +93,7 @@ class TriageApiController extends Controller
 
         $finalLevel = $request->finalLevel();
         $analysis = $request->aiAnalysis();
-        $data['priority'] = match ($finalLevel) {
-            'Emergency' => 'Level 1',
-            'Urgent' => 'Level 2',
-            'Prompt' => 'Level 3',
-            'Non-Urgent' => 'Level 4',
-            default => 'Level 5',
-        };
+        $data['priority'] = TriageDecisionRules::priorityCode($finalLevel);
         $assessment = $this->triageService->triage($visit, $data);
         $assessment = $this->triageService->recordDecision(
             $assessment,

@@ -304,7 +304,7 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
     Route::middleware(['can:triage-patients', 'role:nurse,doctor,super-admin'])->group(function () {
         Route::get('triage', [TriageAssessmentController::class, 'create'])->name('triage.dashboard');
         Route::get('triage/create', [TriageAssessmentController::class, 'create'])->name('triage.create');
-        Route::post('triage', [TriageAssessmentController::class, 'store'])->middleware('role:nurse,doctor')->name('triage.store');
+        Route::post('triage', [TriageAssessmentController::class, 'store'])->middleware('role:nurse,doctor,super-admin')->name('triage.store');
         Route::get('triage/{triageAssessment}/er-intake', [EmergencyController::class, 'createFromTriage'])->name('triage.er-intake');
     });
 

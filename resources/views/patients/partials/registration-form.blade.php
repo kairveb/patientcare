@@ -171,13 +171,7 @@
             'contact' => null,
         ])
 
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <label class="flex items-start gap-3 text-sm text-amber-950">
-                <input type="checkbox" name="data_privacy_consent" value="1" required @checked(old('data_privacy_consent')) class="mt-1 rounded border-amber-400">
-                <span><strong>{{ config('consents.types.DATA_PRIVACY.title') }} (v{{ config('consents.types.DATA_PRIVACY.version') }})</strong><br>{{ config('consents.types.DATA_PRIVACY.text') }}</span>
-            </label>
-            @error('data_privacy_consent')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
-        </div>
+        <x-patient-consent />
 
         <div class="mt-8 flex items-center justify-end gap-3">
             <button type="button" class="rounded-xl border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" data-bs-dismiss="modal">Cancel</button>

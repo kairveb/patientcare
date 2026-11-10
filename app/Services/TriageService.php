@@ -187,6 +187,16 @@ class TriageService
         return $assessment;
     }
 
+    public function assess(ErVisit $visit, array $data): TriageAssessment
+    {
+        return DB::transaction(function () use ($visit, $data): TriageAssessment {
+            $assessment = $this->createAssessment($visit, $data);
+            $this->createVitalsIfPresent($assessment, $data['vitals'] ?? null);
+
+            return $assessment;
+        });
+    }
+
     public function score(array $data): array
     {
         $analysisData = $this->buildAnalysisData($data);
@@ -405,6 +415,7 @@ class TriageService
                 'triage_nurse_id' => auth()->id(),
                 'triaged_at' => now(),
                 'chief_complaint' => $data['chief_complaint'] ?? $visit->chief_complaint,
+                'symptoms' => $data['symptoms'] ?? [],
                 'pain_score' => $data['pain_score'] ?? null,
                 'priority' => $data['priority'],
                 'priority_score' => $this->normalizePriorityScore($data['priority']),

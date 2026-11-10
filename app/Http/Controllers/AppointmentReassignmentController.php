@@ -44,7 +44,7 @@ class AppointmentReassignmentController extends Controller
             'cases' => $cases,
             'candidateMap' => $candidateMap,
             'unavailabilities' => ProviderUnavailability::with(['provider', 'recordedBy'])->latest()->limit(10)->get(),
-            'providers' => Provider::query()->where('active', true)->with('user')->orderBy('display_name')->get(),
+            'providers' => Provider::query()->where('active', true)->with(['user', 'department'])->orderBy('display_name')->get(),
             'statuses' => [
                 AppointmentReassignment::STATUS_PENDING_REVIEW,
                 AppointmentReassignment::STATUS_DECLINED_BY_PATIENT,

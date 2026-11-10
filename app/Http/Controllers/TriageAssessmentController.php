@@ -8,6 +8,7 @@ use App\Models\Patient;
 use App\Models\TriageAssessment;
 use App\Services\EmergencyAlertService;
 use App\Services\TriageService;
+use App\Support\TriageDecisionRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -31,7 +32,7 @@ class TriageAssessmentController extends Controller
     {
         $data = $request->validated();
 
-        $symptoms = array_values(array_filter(array_map('trim', preg_split('/[,;\n]/', (string) ($data['symptoms'] ?? '')))));
+        $symptoms = $request->normalizedSymptoms();
         $result = $request->aiAnalysis();
         $finalPriority = $request->finalLevel();
         $finalNotes = $data['notes'] ?? $result['recommendation'];
@@ -42,7 +43,7 @@ class TriageAssessmentController extends Controller
                 'chief_complaint' => $data['chief_complaint'],
             ],
             [
-                'visit_number' => app(\App\Services\TriageService::class)->generateVisitNumber(),
+                'visit_number' => $this->triage->generateVisitNumber(),
                 'arrived_at' => now(),
                 'arrival_method' => 'Walk-in',
                 'referral_details' => $data['notes'] ?? null,
@@ -52,23 +53,25 @@ class TriageAssessmentController extends Controller
         );
         $newVisit = $visit->wasRecentlyCreated;
 
-        $assessment = TriageAssessment::updateOrCreate(
-            ['er_visit_id' => $visit->id],
-            [
-                'patient_id' => $data['patient_id'],
-                'triage_nurse_id' => auth()->id(),
-                'triaged_at' => now(),
-                'chief_complaint' => $data['chief_complaint'],
-                'symptoms' => $symptoms,
-                'pain_score' => $data['pain_score'] ?? null,
-                'gcs' => $data['gcs'] ?? null,
-                'priority' => $finalPriority,
-                'priority_score' => $this->priorityScoreFor($finalPriority),
-                'triage_color' => $this->priorityColorFor($finalPriority),
-                'notes' => $finalNotes . (empty($data['notes']) ? '' : ' | AI rationale: ' . implode(' ', $result['reasons'])),
-                'status' => 'COMPLETE',
-            ]
-        );
+        $vitals = array_filter([
+            'blood_pressure' => $data['blood_pressure'] ?? null,
+            'heart_rate' => $data['heart_rate'] ?? null,
+            'respiratory_rate' => $data['respiratory_rate'] ?? null,
+            'temperature' => $data['temperature'] ?? null,
+            'spo2' => $data['spo2'] ?? null,
+        ], fn ($value) => $value !== null && $value !== '');
+        $assessment = $this->triage->assess($visit, [
+            'patient_id' => $data['patient_id'],
+            'chief_complaint' => $data['chief_complaint'],
+            'symptoms' => $symptoms,
+            'pain_score' => $data['pain_score'] ?? null,
+            'gcs' => $data['gcs'] ?? null,
+            'priority' => TriageDecisionRules::priorityCode($finalPriority),
+            'notes' => $finalNotes . (empty($data['notes']) ? '' : ' | AI rationale: ' . implode(' ', $result['reasons'])),
+            'provider_id' => $data['provider_id'] ?? null,
+            'treatment_area' => $data['treatment_area'] ?? null,
+            'vitals' => $vitals,
+        ]);
         $assessment = $this->triage->recordDecision(
             $assessment,
             $result,
@@ -77,23 +80,9 @@ class TriageAssessmentController extends Controller
             $request->user()
         );
 
-        $assessment->vitals()->updateOrCreate(
-            ['triage_assessment_id' => $assessment->id],
-            [
-                'patient_id' => $data['patient_id'],
-                'blood_pressure' => $data['blood_pressure'] ?? null,
-                'heart_rate' => $data['heart_rate'] ?? null,
-                'respiratory_rate' => $data['respiratory_rate'] ?? null,
-                'temperature' => $data['temperature'] ?? null,
-                'spo2' => $data['spo2'] ?? null,
-                'recorded_at' => now(),
-            ]
-        );
-
         if ($newVisit) {
             $this->emergencyAlerts->visitCreated();
         }
-        $this->emergencyAlerts->triageRecorded($assessment);
 
         if ($request->expectsJson()) {
             $assessment->load(['vitals', 'erVisit']);
@@ -125,27 +114,7 @@ class TriageAssessmentController extends Controller
             ]);
         }
 
-        return redirect()->route('triage.er-intake', $assessment)->with('success', 'AI triage complete. Priority: ' . $finalPriority . ' (' . ucfirst($this->priorityColorFor($finalPriority)) . ')');
+        return redirect()->route('triage.er-intake', $assessment)->with('success', 'AI triage complete. Priority: ' . $finalPriority . ' (' . ucfirst(TriageDecisionRules::colorForLevel($finalPriority)) . ')');
     }
 
-    protected function priorityScoreFor(string $priority): int
-    {
-        return match (strtolower(trim($priority))) {
-            'emergency' => 1,
-            'urgent' => 2,
-            'prompt' => 3,
-            'non-urgent' => 4,
-            default => 5,
-        };
-    }
-
-    protected function priorityColorFor(string $priority): string
-    {
-        return match (strtolower(trim($priority))) {
-            'emergency' => 'red',
-            'urgent' => 'yellow',
-            'prompt' => 'orange',
-            default => 'green',
-        };
-    }
 }

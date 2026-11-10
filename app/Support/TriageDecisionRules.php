@@ -18,6 +18,27 @@ class TriageDecisionRules
         };
     }
 
+    public static function priorityCode(string $level): string
+    {
+        return match (self::normalizeLevel($level)) {
+            'Emergency' => 'Level 1',
+            'Urgent' => 'Level 2',
+            'Prompt' => 'Level 3',
+            'Non-Urgent' => 'Level 4',
+            default => 'Level 5',
+        };
+    }
+
+    public static function colorForLevel(string $level): string
+    {
+        return match (self::normalizeLevel($level)) {
+            'Emergency' => 'red',
+            'Urgent' => 'yellow',
+            'Prompt' => 'orange',
+            default => 'green',
+        };
+    }
+
     public static function validateOverride(
         Validator $validator,
         string $suggestedLevel,

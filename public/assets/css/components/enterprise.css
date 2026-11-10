@@ -44,7 +44,7 @@
 .hims-table tbody tr:not(.is-selected):hover { background:var(--color-surface-muted); }
 .hims-table tbody tr.is-selected { background:var(--color-primary-soft); }
 .hims-table :is(th,td).hims-table__select { width:44px; padding-right:6px; text-align:center; }
-.hims-table :is(input[type="checkbox"],input[type="radio"]) { width:16px; height:16px; accent-color:var(--color-primary); }
+.hims-table :is(input[type="checkbox"],input[type="radio"]) { width:16px; height:16px; min-height:16px; flex:0 0 16px; padding:0; accent-color:var(--color-primary); }
 .hims-table__actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; white-space:nowrap; }
 .hims-table-shell__footer { padding:12px 16px; border-top:1px solid var(--color-border); }
 .hims-pagination { display:flex; align-items:center; justify-content:flex-end; gap:18px; color:var(--color-text-muted); font-size:11px; }
@@ -78,15 +78,15 @@
 .hims-form-field { display:flex; min-width:0; flex-direction:column; gap:6px; }
 .hims-form-field > label { color:var(--color-text); font-size:12px; font-weight:600; }
 .hims-required { margin-left:3px; color:#dc2626; }
-.hims-form-field :is(input,select,textarea) { width:100%; min-height:44px; padding:10px 12px; border:1px solid var(--color-border-strong); border-radius:var(--radius-md); outline:0; background:var(--color-surface); color:var(--color-text); font-size:13px; }
+.hims-form-field :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea) { width:100%; min-height:44px; padding:10px 12px; border:1px solid var(--color-border-strong); border-radius:var(--radius-md); outline:0; background:var(--color-surface); color:var(--color-text); font-size:13px; }
 .hims-form-field textarea { min-height:112px; resize:vertical; }
-.hims-form-field :is(input,select,textarea):focus { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--focus-ring); }
-.hims-form-field :is(input,select,textarea):disabled { background:var(--color-surface-secondary); color:var(--color-text-muted); cursor:not-allowed; opacity:.72; }
-.hims-form-field :is(input,textarea)[readonly] { background:var(--color-surface-muted); color:var(--color-text-muted); }
+.hims-form-field :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea):focus { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--focus-ring); }
+.hims-form-field :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea):disabled { background:var(--color-surface-secondary); color:var(--color-text-muted); cursor:not-allowed; opacity:.72; }
+.hims-form-field :is(input:not([type="checkbox"]):not([type="radio"]),textarea)[readonly] { background:var(--color-surface-muted); color:var(--color-text-muted); }
 .hims-field-message { display:flex; align-items:center; gap:5px; margin:0; color:var(--color-text-muted); font-size:10px; }
-.hims-form-field--error :is(input,select,textarea) { border-color:#dc2626; }
+.hims-form-field--error :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea) { border-color:#dc2626; }
 .hims-field-message--error { color:#dc2626; }
-.hims-form-field--success :is(input,select,textarea) { border-color:#15803d; }
+.hims-form-field--success :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea) { border-color:#15803d; }
 .hims-field-message--success { color:#15803d; }
 
 /* Status, notification, and icon systems */

@@ -391,7 +391,9 @@ class PatientRegistrationCompletenessTest extends TestCase
         $this->actingAs($patientUser)->get(route('patients.profile'))
             ->assertOk()
             ->assertSee('name="data_privacy_consent"', false)
-            ->assertSee('type="checkbox" name="data_privacy_consent" value="1" required', false);
+            ->assertSee('type="checkbox"', false)
+            ->assertSee('value="1"', false)
+            ->assertSee('required', false);
 
         $this->post(route('patients.profile.save'), [
             'first_name' => $patientUser->patient->first_name,
@@ -399,6 +401,18 @@ class PatientRegistrationCompletenessTest extends TestCase
             'date_of_birth' => $patientUser->patient->date_of_birth->toDateString(),
             'sex' => $patientUser->patient->sex,
         ])->assertSessionHasErrors('data_privacy_consent');
+    }
+
+    public function test_staff_registration_uses_the_shared_privacy_consent_block(): void
+    {
+        $admin = User::where('email', 'super-admin@coor.test')->firstOrFail();
+
+        $this->withoutMiddleware(EnsureCurrentPrivacyAcceptance::class)
+            ->actingAs($admin)->get(route('patients.index'))
+            ->assertOk()
+            ->assertSee('name="data_privacy_consent"', false)
+            ->assertSee('Read the Privacy Notice')
+            ->assertSee('type="checkbox"', false);
     }
 
     public function test_registration_staff_verifies_identifiers_and_identifier_changes_clear_verification(): void

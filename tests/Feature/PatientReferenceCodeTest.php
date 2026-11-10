@@ -119,7 +119,7 @@ class PatientReferenceCodeTest extends TestCase
             'email' => 'prc-account@example.test',
             'password' => 'Password123!Secure',
             'password_confirmation' => 'Password123!Secure',
-            'privacy_notice_accepted' => '1',
+            'data_privacy_consent' => '1',
             'terms_accepted' => '1',
         ])->assertRedirect();
 

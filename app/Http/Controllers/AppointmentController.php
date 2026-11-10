@@ -70,9 +70,9 @@ class AppointmentController extends Controller
             $patients = Patient::where('is_temporary_identity', false)->orderBy('last_name')->get();
         }
 
-        $providers = Provider::where('active', true)->with('department')->get();
-        $departments = Department::orderBy('name')->get();
-        $appointmentTypes = AppointmentType::orderBy('name')->get();
+        $providers = Provider::query()->where('active', true)->with('department')->orderBy('display_name')->get();
+        $departments = Department::query()->where('active', true)->orderBy('name')->get();
+        $appointmentTypes = AppointmentType::query()->where('active', true)->orderBy('name')->get();
 
         return view('appointments.index', [
             'appointments' => $appointments,
@@ -100,9 +100,9 @@ class AppointmentController extends Controller
         $patients = $user->isPatient()
             ? collect([$user->patient()->firstOrFail()])
             : Patient::where('is_temporary_identity', false)->orderBy('last_name')->get();
-        $providers = Provider::where('active', true)->with('department')->get();
-        $departments = Department::orderBy('name')->get();
-        $appointmentTypes = AppointmentType::orderBy('name')->get();
+        $providers = Provider::query()->where('active', true)->with('department')->orderBy('display_name')->get();
+        $departments = Department::query()->where('active', true)->orderBy('name')->get();
+        $appointmentTypes = AppointmentType::query()->where('active', true)->orderBy('name')->get();
         $selectedAppointmentTypeId = null;
         $selectedDepartmentId = null;
         $selectedProviderId = null;

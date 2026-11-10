@@ -245,6 +245,18 @@ class AdminUserAndBedSetupTest extends TestCase
         $this->assertDatabaseHas('beds', ['id' => $bed->id]);
     }
 
+    public function test_bed_setup_renders_consistently_aligned_ward_room_and_bed_actions(): void
+    {
+        $this->actingAs($this->superAdmin())->get(route('admin.bed-setup.index'))
+            ->assertOk()
+            ->assertSee('md:grid-cols-5')
+            ->assertSee('md:grid-cols-4')
+            ->assertSee('type="checkbox" name="active"', false)
+            ->assertSee('Save ward')
+            ->assertSee('Save room')
+            ->assertSee('Delete');
+    }
+
     public function test_nurse_cannot_access_or_change_bed_setup(): void
     {
         $nurse = $this->userWithRole('nurse');

@@ -1,4 +1,4 @@
-<form method="GET" class="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+<form method="GET" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
     <div><label class="block text-xs text-slate-500 mb-1">Start</label><input type="date" name="start" value="{{ request('start', $start ?? '') }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
     <div><label class="block text-xs text-slate-500 mb-1">End</label><input type="date" name="end" value="{{ request('end', $end ?? '') }}" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"></div>
     <div><label class="block text-xs text-slate-500 mb-1">Department</label><select name="department_id" class="px-3 py-2 text-sm border border-slate-300 rounded-lg"><option value="">All departments</option>@foreach ($reportDepartments as $department)<option value="{{ $department->id }}" @selected((string) request('department_id') === (string) $department->id)>{{ $department->name }}</option>@endforeach</select></div>
