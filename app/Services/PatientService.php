@@ -8,6 +8,7 @@ use App\Models\PatientAddress;
 use App\Models\PatientIdentifier;
 use App\Models\PreArrivalProfile;
 use App\Models\User;
+use App\Support\PatientIdentifierNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -43,8 +44,12 @@ class PatientService
     public function register(array $data, ?int $userId = null): Patient
     {
         return DB::transaction(function () use ($data, $userId) {
+            $data = PatientIdentifierNormalizer::normalizeFields($data);
             $data['mrn'] = $data['mrn'] ?? $this->generateMpn();
             $data['verified'] = $data['verified'] ?? false;
+            $data['nationality'] = filled($data['nationality'] ?? null)
+                ? $data['nationality']
+                : config('patient.nationality_default');
 
             // Strip relational keys that belong in separate tables
             $patientData = Arr::except($data, ['address', 'emergency_contact', 'identifiers']);
@@ -466,6 +471,7 @@ class PatientService
     public function update(Patient $patient, array $data): Patient
     {
         return DB::transaction(function () use ($patient, $data) {
+            $data = PatientIdentifierNormalizer::normalizeFields($data);
             foreach (PatientIdentifierService::verificationColumns() as $identifier => [$verifiedBy, $verifiedAt]) {
                 if (array_key_exists($identifier, $data) && $data[$identifier] !== $patient->{$identifier}) {
                     $data[$verifiedBy] = null;

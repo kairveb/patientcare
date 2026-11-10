@@ -57,13 +57,20 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::prefix('/address-data/philippines')->middleware('throttle:60,1')->group(function () {
-        Route::get('/regions', [PhilippineAddressDataController::class, 'regions']);
-        Route::get('/regions/{region}/provinces', [PhilippineAddressDataController::class, 'provinces']);
-        Route::get('/regions/{region}/cities', [PhilippineAddressDataController::class, 'citiesByRegion']);
-        Route::get('/provinces/{province}/cities', [PhilippineAddressDataController::class, 'citiesByProvince']);
-        Route::get('/cities/{city}/sub-municipalities', [PhilippineAddressDataController::class, 'submunicipalities']);
-        Route::get('/cities/{parent}/barangays', [PhilippineAddressDataController::class, 'barangays']);
-        Route::get('/sub-municipalities/{parent}/barangays', [PhilippineAddressDataController::class, 'barangays']);
+        Route::get('/regions', [PhilippineAddressDataController::class, 'regions'])
+            ->name('api.v1.address-data.regions');
+        Route::get('/regions/{region}/provinces', [PhilippineAddressDataController::class, 'provinces'])
+            ->name('api.v1.address-data.provinces');
+        Route::get('/regions/{region}/cities', [PhilippineAddressDataController::class, 'citiesByRegion'])
+            ->name('api.v1.address-data.region-cities');
+        Route::get('/provinces/{province}/cities', [PhilippineAddressDataController::class, 'citiesByProvince'])
+            ->name('api.v1.address-data.province-cities');
+        Route::get('/cities/{city}/sub-municipalities', [PhilippineAddressDataController::class, 'submunicipalities'])
+            ->name('api.v1.address-data.submunicipalities');
+        Route::get('/cities/{parent}/barangays', [PhilippineAddressDataController::class, 'barangays'])
+            ->name('api.v1.address-data.city-barangays');
+        Route::get('/sub-municipalities/{parent}/barangays', [PhilippineAddressDataController::class, 'barangays'])
+            ->name('api.v1.address-data.submunicipality-barangays');
     });
 
     Route::middleware(['auth:sanctum', EnsureActiveUser::class, EnsureCurrentPrivacyAcceptance::class])

@@ -83,7 +83,7 @@ class TrustedProxyHttpsTest extends TestCase
             'HTTPS' => 'off',
             'HTTP_X_FORWARDED_PROTO' => 'https',
             'HTTP_X_FORWARDED_HOST' => 'spoofed.example.test',
-        ])->get('/login');
+        ])->get('http://app.internal.test/login');
 
         $response->assertStatus(308);
         $location = $response->headers->get('Location');

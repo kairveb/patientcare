@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CompleteTemporaryIdentityRequest;
 use App\Http\Requests\MergePatientRequest;
 use App\Models\Patient;
-use App\Rules\PhilHealthNumber;
-use App\Rules\PatientIdentifierNumber;
 use App\Rules\PhilippineMobilePhone;
 use App\Rules\PhilippinePostalCode;
 use App\Services\AuditLogService;
@@ -16,6 +14,7 @@ use App\Services\PatientQrCodeService;
 use App\Services\PatientService;
 use App\Services\PatientConsentService;
 use App\Services\PhilippineAddressDataset;
+use App\Support\PatientValidationRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -67,44 +66,41 @@ class PatientApiController extends Controller
         abort_unless(Gate::allows('create-patients'), 403, 'You are not authorized to create patients.');
 
         $data = $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'middle_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
+            'first_name' => PatientValidationRules::name('required'),
+            'middle_name' => PatientValidationRules::name(),
+            'last_name' => PatientValidationRules::name('required'),
             'suffix' => ['nullable', 'string', 'max:20'],
-            'date_of_birth' => ['required', 'date', 'before:today'],
-            'sex' => ['required', 'in:Male,Female,Other'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'sex' => PatientValidationRules::sex('required'),
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
-            'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
-            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            ...PatientValidationRules::identifiers(),
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
-            'civil_status' => ['nullable', 'string', 'max:30'],
-            'nationality' => ['nullable', 'string', 'max:100'],
+            'civil_status' => PatientValidationRules::civilStatus(),
+            'nationality' => PatientValidationRules::nationality(),
             'phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'email' => ['nullable', 'email', 'max:255'],
-            'allergies' => ['nullable', 'string'],
+            'allergies' => ['nullable', 'string', 'max:2000'],
             'address' => ['nullable', 'array'],
-            'address.line1' => ['nullable', 'string'],
+            'address.line1' => ['nullable', 'string', 'max:255'],
             'address.region' => ['nullable', 'string', 'max:150'],
             'address.region_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.barangay' => ['nullable', 'string'],
+            'address.barangay' => ['nullable', 'string', 'max:150'],
             'address.barangay_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.city' => ['nullable', 'string'],
+            'address.city' => ['nullable', 'string', 'max:150'],
             'address.city_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.province' => ['nullable', 'string'],
+            'address.province' => ['nullable', 'string', 'max:150'],
             'address.province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.submunicipality' => ['nullable', 'string'],
+            'address.submunicipality' => ['nullable', 'string', 'max:150'],
             'address.submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
-            'emergency_contact.name' => ['nullable', 'string'],
-            'emergency_contact.relationship' => ['nullable', 'string'],
-            'emergency_contact.phone' => ['nullable', 'string', new PhilippineMobilePhone],
+            'emergency_contact.name' => ['nullable', 'string', 'max:150'],
+            'emergency_contact.relationship' => ['nullable', 'string', 'max:50'],
+            'emergency_contact.phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'data_privacy_consent' => ['accepted'],
             'force_duplicate' => ['sometimes', 'boolean'],
         ]);
@@ -236,29 +232,26 @@ class PatientApiController extends Controller
         abort_unless(Gate::allows('update', $patient), 403, 'You are not authorized to update this patient.');
 
         $data = $request->validate([
-            'first_name' => ['sometimes', 'string', 'max:255'],
-            'middle_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['sometimes', 'string', 'max:255'],
+            'first_name' => PatientValidationRules::name('sometimes'),
+            'middle_name' => PatientValidationRules::name(),
+            'last_name' => PatientValidationRules::name('sometimes'),
             'suffix' => ['nullable', 'string', 'max:20'],
-            'date_of_birth' => ['sometimes', 'date', 'before:today'],
-            'sex' => ['sometimes', 'in:Male,Female,Other'],
+            'date_of_birth' => ['sometimes', 'date', 'before_or_equal:today'],
+            'sex' => PatientValidationRules::sex('sometimes'),
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
-            'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
-            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            ...PatientValidationRules::identifiers(),
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
-            'civil_status' => ['nullable', 'string', 'max:30'],
-            'nationality' => ['nullable', 'string', 'max:100'],
+            'civil_status' => PatientValidationRules::civilStatus(),
+            'nationality' => PatientValidationRules::nationality(),
             'phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'email' => ['nullable', 'email', 'max:255'],
-            'allergies' => ['nullable', 'string'],
+            'allergies' => ['nullable', 'string', 'max:2000'],
             'address' => ['nullable', 'array'],
-            'address.line1' => ['nullable', 'string'],
+            'address.line1' => ['nullable', 'string', 'max:255'],
             'address.region' => ['nullable', 'string', 'max:150'],
             'address.region_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.province' => ['nullable', 'string', 'max:150'],
@@ -272,7 +265,7 @@ class PatientApiController extends Controller
             'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
             'emergency_contact.name' => ['nullable', 'string', 'max:150'],
-            'emergency_contact.relationship' => ['nullable', 'string', 'max:100'],
+            'emergency_contact.relationship' => ['nullable', 'string', 'max:50'],
             'emergency_contact.phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
         ]);
         if (isset($data['address'])) {

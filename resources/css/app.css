@@ -101,6 +101,12 @@ button[type="submit"]:hover,
   -webkit-appearance: none;
 }
 
+.hims-required {
+    color: #dc2626;
+    font-weight: 700;
+    margin-left: 0.15rem;
+}
+
 .password-toggle {
   position: absolute;
   top: 0;

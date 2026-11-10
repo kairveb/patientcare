@@ -54,7 +54,7 @@
 @endphp
 
 <div id="{{ $componentId }}" class="grid grid-cols-1 gap-4 md:grid-cols-2" data-philippine-address-root
-    data-endpoint="/api/v1/address-data/philippines"
+    data-endpoint="{{ route('api.v1.address-data.regions', [], false) }}"
     data-initial-codes="{{ json_encode($codes) }}"
     data-legacy-names="{{ json_encode($values) }}">
     @foreach (['region' => 'Region', 'province' => 'Province', 'city' => 'City / Municipality', 'submunicipality' => 'Manila District', 'barangay' => 'Barangay'] as $level => $label)
@@ -81,9 +81,7 @@
     @push('scripts')
         <script>
             (() => {
-                const endpoint = '/api/v1/address-data/philippines';
-
-                const fetchRows = async (path) => {
+                const fetchRows = async (endpoint, path) => {
                     const response = await fetch(`${endpoint}/${path}`, {
                         headers: { Accept: 'application/json' },
                         credentials: 'same-origin',
@@ -117,6 +115,7 @@
                         level,
                         root.querySelector(`[data-address-wrapper="${level}"]`),
                     ]));
+                    const endpoint = root.dataset.endpoint.replace(/\/regions\/?$/, '');
                     const initialCodes = JSON.parse(root.dataset.initialCodes || '{}');
                     const legacyNames = JSON.parse(root.dataset.legacyNames || '{}');
                     const error = root.querySelector('[data-address-error]');
@@ -154,7 +153,7 @@
                         const path = parentLevel === 'submunicipality'
                             ? `sub-municipalities/${parentCode}/barangays`
                             : `cities/${parentCode}/barangays`;
-                        const rows = await fetchRows(path);
+                        const rows = await fetchRows(endpoint, path);
                         setOptions(selects.barangay, rows, selectedCode);
                         if (selects.barangay.value) {
                             setSelected('barangay', rows.find((row) => row.psgc_code === selects.barangay.value));
@@ -164,7 +163,7 @@
                         const path = parentLevel === 'region'
                             ? `regions/${parentCode}/cities`
                             : `provinces/${parentCode}/cities`;
-                        const rows = await fetchRows(path);
+                        const rows = await fetchRows(endpoint, path);
                         setOptions(selects.city, rows, selectedCode);
                         if (selects.city.value) {
                             setSelected('city', rows.find((row) => row.psgc_code === selects.city.value));
@@ -173,8 +172,8 @@
                     };
                     const loadSubmunicipalities = async (cityCode, selectedCode = '', barangayCode = '') => {
                         const [submunicipalities, directBarangays] = await Promise.all([
-                            fetchRows(`cities/${cityCode}/sub-municipalities`),
-                            fetchRows(`cities/${cityCode}/barangays`),
+                            fetchRows(endpoint, `cities/${cityCode}/sub-municipalities`),
+                            fetchRows(endpoint, `cities/${cityCode}/barangays`),
                         ]);
                         if (submunicipalities.length) {
                             wrappers.submunicipality.classList.remove('hidden');
@@ -200,11 +199,11 @@
                     }
 
                     try {
-                        const regions = await fetchRows('regions');
+                        const regions = await fetchRows(endpoint, 'regions');
                         setOptions(selects.region, regions, initialCodes.region);
                         if (selects.region.value) {
                             setSelected('region', regions.find((row) => row.psgc_code === selects.region.value));
-                            const provinces = await fetchRows(`regions/${selects.region.value}/provinces`);
+                            const provinces = await fetchRows(endpoint, `regions/${selects.region.value}/provinces`);
                             if (provinces.length) {
                                 wrappers.province.classList.remove('hidden');
                                 setOptions(selects.province, provinces, initialCodes.province);
@@ -212,7 +211,7 @@
                                     setSelected('province', provinces.find((row) => row.psgc_code === selects.province.value));
                                     await loadCities(selects.province.value, 'province', initialCodes.city);
                                 } else {
-                                    const directCities = await fetchRows(`regions/${selects.region.value}/cities`);
+                                    const directCities = await fetchRows(endpoint, `regions/${selects.region.value}/cities`);
                                     if (directCities.length) addDirectRegionChoice(selects.province, '__region__');
                                     if (initialCodes.city && directCities.some((row) => row.psgc_code === initialCodes.city)) {
                                         setSelected('province', { psgc_code: '', name: '' });
@@ -236,10 +235,10 @@
                             if (!region) return;
                             setSelected('region', region);
                             try {
-                                const provinces = await fetchRows(`regions/${region.psgc_code}/provinces`);
+                                const provinces = await fetchRows(endpoint, `regions/${region.psgc_code}/provinces`);
                                 if (provinces.length) {
                                     setOptions(selects.province, provinces);
-                                    const directCities = await fetchRows(`regions/${region.psgc_code}/cities`);
+                                    const directCities = await fetchRows(endpoint, `regions/${region.psgc_code}/cities`);
                                     if (directCities.length) addDirectRegionChoice(selects.province);
                                 } else {
                                     wrappers.province.classList.add('hidden');

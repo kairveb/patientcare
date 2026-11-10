@@ -12,8 +12,6 @@ use App\Models\Provider;
 use App\Http\Requests\CompleteTemporaryIdentityRequest;
 use App\Http\Requests\MergePatientRequest;
 use App\Http\Requests\VerifyPatientIdentifierRequest;
-use App\Rules\PhilHealthNumber;
-use App\Rules\PatientIdentifierNumber;
 use App\Rules\PhilippinePostalCode;
 use App\Rules\PhilippineMobilePhone;
 use App\Services\AuditLogService;
@@ -23,6 +21,7 @@ use App\Services\PatientMergeService;
 use App\Services\PatientQrCodeService;
 use App\Services\PatientService;
 use App\Services\PhilippineAddressDataset;
+use App\Support\PatientValidationRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -89,17 +88,18 @@ class PatientController extends Controller
         $this->authorize('create', Patient::class);
 
         $data = $request->validate([
-            'first_name' => ['required', 'string', 'max:100', 'regex:/^[\pL\s\'\-.]+$/u'],
-            'last_name' => ['required', 'string', 'max:100', 'regex:/^[\pL\s\'\-.]+$/u'],
+            'first_name' => PatientValidationRules::name('required'),
+            'middle_name' => PatientValidationRules::name(),
+            'last_name' => PatientValidationRules::name('required'),
+            'suffix' => ['nullable', 'string', 'max:20'],
             'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
-            'sex' => ['required', 'in:Male,Female,Other'],
+            'sex' => PatientValidationRules::sex('required'),
+            'civil_status' => PatientValidationRules::civilStatus(),
+            'nationality' => PatientValidationRules::nationality(),
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
-            'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
-            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            ...PatientValidationRules::identifiers(),
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -110,21 +110,20 @@ class PatientController extends Controller
             'address_region_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_barangay' => ['nullable', 'string', 'max:150', 'regex:/^[\pL\pN\s\'\-.]+$/u'],
             'address_barangay_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_city' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN\s\'\-.]+$/u'],
+            'address_city' => ['nullable', 'string', 'max:150', 'regex:/^[\pL\pN\s\'\-.]+$/u'],
             'address_city_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_province' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN\s\'\-.]+$/u'],
+            'address_province' => ['nullable', 'string', 'max:150', 'regex:/^[\pL\pN\s\'\-.]+$/u'],
             'address_province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_submunicipality' => ['nullable', 'string', 'max:150'],
             'address_submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_postal' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
+            'allergies' => ['nullable', 'string', 'max:2000'],
             'emergency_name' => ['nullable', 'string', 'max:150', 'regex:/^[\pL\s\'\-.]+$/u'],
             'emergency_relationship' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s\'\-.]+$/u'],
             'emergency_phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'data_privacy_consent' => ['accepted'],
             'force' => ['sometimes', 'boolean'],
         ], [
-            'first_name.regex' => 'First name may only contain letters, spaces, and basic punctuation.',
-            'last_name.regex' => 'Last name may only contain letters, spaces, and basic punctuation.',
             'phone' => 'Contact number must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).',
             'emergency_phone' => 'Emergency contact number must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).',
             'date_of_birth.before_or_equal' => 'Date of birth cannot be in the future.',
@@ -184,9 +183,13 @@ class PatientController extends Controller
     {
         return [
             'first_name' => $data['first_name'],
+            'middle_name' => $data['middle_name'] ?? null,
             'last_name' => $data['last_name'],
+            'suffix' => $data['suffix'] ?? null,
             'date_of_birth' => $data['date_of_birth'],
             'sex' => $data['sex'],
+            'civil_status' => $data['civil_status'] ?? null,
+            'nationality' => $data['nationality'] ?? config('patient.nationality_default'),
             'religion' => $data['religion'] ?? null,
             'occupation' => $data['occupation'] ?? null,
             'philhealth_number' => $data['philhealth_number'] ?? null,
@@ -199,6 +202,7 @@ class PatientController extends Controller
             'guarantor_contact' => $data['guarantor_contact'] ?? null,
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
+            'allergies' => $data['allergies'] ?? null,
             'address' => [
                 'line1' => $data['address_line1'] ?? null,
                 'region' => $data['address_region'] ?? null,
@@ -364,43 +368,41 @@ class PatientController extends Controller
         $needsDataPrivacyConsent = ! $this->consents->hasCurrentGrant($patient, 'DATA_PRIVACY');
 
         $data = $request->validate([
-            'first_name' => ['required', 'string', 'max:100'],
-            'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name' => ['required', 'string', 'max:100'],
+            'first_name' => PatientValidationRules::name('required'),
+            'middle_name' => PatientValidationRules::name(),
+            'last_name' => PatientValidationRules::name('required'),
+            'suffix' => ['nullable', 'string', 'max:20'],
             'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
-            'sex' => ['required', 'in:Male,Female,Other'],
+            'sex' => PatientValidationRules::sex('required'),
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
-            'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
-            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            ...PatientValidationRules::identifiers(),
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'email' => ['nullable', 'email', 'max:255'],
-            'civil_status' => ['nullable', 'in:Single,Married,Widowed,Separated,Annulled/Divorced'],
-            'nationality' => ['nullable', 'string', 'max:100'],
+            'civil_status' => PatientValidationRules::civilStatus(),
+            'nationality' => PatientValidationRules::nationality(),
             'allergies' => ['nullable', 'string', 'max:2000'],
             'address' => ['nullable', 'array'],
-            'address.line1' => ['nullable', 'string'],
+            'address.line1' => ['nullable', 'string', 'max:255'],
             'address.region' => ['nullable', 'string', 'max:150'],
             'address.region_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.barangay' => ['nullable', 'string'],
+            'address.barangay' => ['nullable', 'string', 'max:150'],
             'address.barangay_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.city' => ['nullable', 'string'],
+            'address.city' => ['nullable', 'string', 'max:150'],
             'address.city_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.province' => ['nullable', 'string'],
+            'address.province' => ['nullable', 'string', 'max:150'],
             'address.province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address.submunicipality' => ['nullable', 'string'],
+            'address.submunicipality' => ['nullable', 'string', 'max:150'],
             'address.submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address.postal_code' => ['nullable', 'string', 'max:4', new PhilippinePostalCode],
             'emergency_contact' => ['nullable', 'array'],
-            'emergency_contact.name' => ['nullable', 'string'],
-            'emergency_contact.relationship' => ['nullable', 'string'],
-            'emergency_contact.phone' => ['nullable', 'string', new PhilippineMobilePhone],
+            'emergency_contact.name' => ['nullable', 'string', 'max:150'],
+            'emergency_contact.relationship' => ['nullable', 'string', 'max:50'],
+            'emergency_contact.phone' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
             'data_privacy_consent' => $needsDataPrivacyConsent ? ['accepted'] : ['sometimes', 'accepted'],
         ]);
         if (isset($data['address'])) {

@@ -208,8 +208,8 @@ class EncounterClinicalSafeguardsTest extends TestCase
         $this->actingAs($doctor)->get(route('encounters.show', $encounter))
             ->assertOk()
             ->assertSee('Complete Encounter')
-            ->assertSee('Assessment *')
-            ->assertSee('Plan *');
+            ->assertSee('Assessment <span class="hims-required" aria-hidden="true">*</span>', false)
+            ->assertSee('Plan <span class="hims-required" aria-hidden="true">*</span>', false);
 
         $otherProvider = Provider::create([
             'user_id' => User::factory()->create()->id,

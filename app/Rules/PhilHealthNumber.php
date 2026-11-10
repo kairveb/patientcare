@@ -14,7 +14,7 @@ class PhilHealthNumber implements ValidationRule
         }
 
         if (! is_string($value)) {
-            $fail('The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.');
+            $fail('Please enter exactly 12 numbers. Spaces or dashes may be used for readability.');
 
             return;
         }
@@ -22,10 +22,10 @@ class PhilHealthNumber implements ValidationRule
         $number = $value;
         $digits = str_replace(['-', ' '], '', $number);
 
-        if (! preg_match('/^[0-9 -]+$/', $number)
+        if (! preg_match('/^[0-9]+(?:[ -]?[0-9]+)*$/', $number)
             || strlen($digits) !== 12
         ) {
-            $fail('The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.');
+            $fail('Please enter exactly 12 numbers. Spaces or dashes may be used for readability.');
         }
     }
 }

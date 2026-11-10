@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PatientIdentifierNormalizer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -53,6 +54,22 @@ class Patient extends Model
         'pwd_id_verified_at' => 'datetime',
         'hmo_member_verified_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Patient $patient): void {
+            foreach (['philhealth_number', 'senior_id_number', 'pwd_id_number', 'hmo_member_id'] as $field) {
+                if (! $patient->isDirty($field) || $patient->{$field} === null) {
+                    continue;
+                }
+
+                $patient->setAttribute(
+                    $field,
+                    PatientIdentifierNormalizer::normalize($patient->{$field})
+                );
+            }
+        });
+    }
 
     public function user(): BelongsTo
     {

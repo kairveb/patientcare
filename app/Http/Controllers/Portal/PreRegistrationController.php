@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Patient;
 use App\Models\PreArrivalProfile;
-use App\Rules\PhilHealthNumber;
 use App\Rules\PhilippineMobilePhone;
-use App\Rules\PatientIdentifierNumber;
 use App\Rules\PhilippinePostalCode;
 use App\Services\PatientService;
 use App\Services\PatientConsentService;
 use App\Services\PatientQrCodeService;
 use App\Services\PhilippineAddressDataset;
+use App\Support\PatientValidationRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -138,7 +137,9 @@ class PreRegistrationController extends Controller
         $preferredDateOfBirth = $data['date_of_birth'] ?? $patient->date_of_birth?->toDateString();
         $preferredSex = $data['sex'] ?? $patient->sex;
         $preferredCivilStatus = $data['civil_status'] ?? $patient->civil_status;
-        $preferredNationality = $data['nationality'] ?? $patient->nationality;
+        $preferredNationality = filled($data['nationality'] ?? null)
+            ? $data['nationality']
+            : ($patient->nationality ?: config('patient.nationality_default'));
         $preferredPhone = $data['phone'] ?? $patient->phone;
         $preferredEmail = $data['email'] ?? $patient->email;
         $patientData = array_intersect_key($data, array_flip([
@@ -239,21 +240,18 @@ class PreRegistrationController extends Controller
         $presence = $newPatient ? 'required' : 'nullable';
 
         $data = $request->validate([
-            'first_name' => [$presence, 'string', 'max:100'],
-            'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name' => [$presence, 'string', 'max:100'],
+            'first_name' => PatientValidationRules::name($presence),
+            'middle_name' => PatientValidationRules::name(),
+            'last_name' => PatientValidationRules::name($presence),
             'suffix' => ['nullable', 'string', 'max:20'],
             'date_of_birth' => [$presence, 'date', 'before_or_equal:today'],
-            'sex' => [$presence, 'in:Male,Female,Other'],
-            'civil_status' => ['nullable', 'string', 'max:50'],
-            'nationality' => ['nullable', 'string', 'max:100'],
+            'sex' => PatientValidationRules::sex($presence),
+            'civil_status' => PatientValidationRules::civilStatus(),
+            'nationality' => PatientValidationRules::nationality(),
             'religion' => ['nullable', 'string', 'max:100'],
             'occupation' => ['nullable', 'string', 'max:150'],
-            'philhealth_number' => ['nullable', 'string', 'max:30', new PhilHealthNumber],
-            'senior_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
-            'pwd_id_number' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
+            ...PatientValidationRules::identifiers(),
             'hmo_name' => ['nullable', 'string', 'max:150'],
-            'hmo_member_id' => ['nullable', 'string', 'max:100', new PatientIdentifierNumber],
             'guarantor_name' => ['nullable', 'string', 'max:150'],
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30', new PhilippineMobilePhone],
@@ -264,9 +262,9 @@ class PreRegistrationController extends Controller
             'address_region_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_barangay' => ['nullable', 'string', 'max:150'],
             'address_barangay_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_city' => ['nullable', 'string', 'max:100'],
+            'address_city' => ['nullable', 'string', 'max:150'],
             'address_city_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
-            'address_province' => ['nullable', 'string', 'max:100'],
+            'address_province' => ['nullable', 'string', 'max:150'],
             'address_province_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'address_submunicipality' => ['nullable', 'string', 'max:150'],
             'address_submunicipality_psgc_code' => ['nullable', 'string', 'regex:/^\d{10}$/'],
@@ -277,7 +275,7 @@ class PreRegistrationController extends Controller
             'emergency_relationship' => ['nullable', 'string', 'max:50'],
             'data_privacy_consent' => ($newPatient || $requireDataPrivacyConsent)
                 ? ['accepted']
-                : ['nullable', 'accepted'],
+                : ['sometimes', 'accepted'],
         ]);
 
         $selection = [];
@@ -313,7 +311,9 @@ class PreRegistrationController extends Controller
             'date_of_birth' => $data['date_of_birth'],
             'sex' => $data['sex'],
             'civil_status' => $data['civil_status'] ?? null,
-            'nationality' => $data['nationality'] ?? null,
+            'nationality' => filled($data['nationality'] ?? null)
+                ? $data['nationality']
+                : config('patient.nationality_default'),
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
             'allergies' => $data['allergies'] ?? null,

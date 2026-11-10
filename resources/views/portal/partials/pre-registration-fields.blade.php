@@ -10,7 +10,7 @@
     $dateOfBirthValue = old('date_of_birth', $patient?->date_of_birth?->format('Y-m-d') ?? '');
     $sexValue = old('sex', $patient?->sex ?? '');
     $civilStatusValue = old('civil_status', $patient?->civil_status ?? '');
-    $nationalityValue = old('nationality', $patient?->nationality ?? '');
+    $nationalityValue = old('nationality') ?: ($patient?->nationality ?: config('patient.nationality_default'));
     $religionValue = old('religion', $patient?->religion ?? '');
     $occupationValue = old('occupation', $patient?->occupation ?? '');
     $philhealthNumberValue = old('philhealth_number', $patient?->philhealth_number ?? '');
@@ -43,22 +43,22 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">First Name <span class="hims-required" aria-hidden="true">*</span></label>
-        <input type="text" name="first_name" value="{{ $firstNameValue }}" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="first_name" value="{{ $firstNameValue }}" maxlength="255" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Middle Name</label>
-        <input type="text" name="middle_name" value="{{ $middleNameValue }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="middle_name" value="{{ $middleNameValue }}" maxlength="255" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Last Name <span class="hims-required" aria-hidden="true">*</span></label>
-        <input type="text" name="last_name" value="{{ $lastNameValue }}" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="last_name" value="{{ $lastNameValue }}" maxlength="255" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Suffix</label>
-        <input type="text" name="suffix" value="{{ $suffixValue }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="suffix" value="{{ $suffixValue }}" maxlength="20" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
@@ -70,15 +70,20 @@
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Sex <span class="hims-required" aria-hidden="true">*</span></label>
         <select name="sex" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
             <option value="">Select</option>
-            <option value="Male" {{ $sexValue === 'Male' ? 'selected' : '' }}>Male</option>
-            <option value="Female" {{ $sexValue === 'Female' ? 'selected' : '' }}>Female</option>
-            <option value="Other" {{ $sexValue === 'Other' ? 'selected' : '' }}>Other</option>
+            @foreach (config('patient.sex_options') as $sexOption)
+                <option value="{{ $sexOption }}" @selected($sexValue === $sexOption)>{{ $sexOption }}</option>
+            @endforeach
         </select>
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Civil Status</label>
-        <input type="text" name="civil_status" value="{{ $civilStatusValue }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <select name="civil_status" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+            <option value="">Select civil status</option>
+            @foreach (config('patient.civil_status_options') as $civilStatus)
+                <option value="{{ $civilStatus }}" @selected($civilStatusValue === $civilStatus)>{{ $civilStatus }}</option>
+            @endforeach
+        </select>
     </div>
 
     <div>
@@ -102,17 +107,17 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">PhilHealth number</label>
-        <input type="text" name="philhealth_number" value="{{ $philhealthNumberValue }}" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="philhealth_number" value="{{ $philhealthNumberValue }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="23" data-patient-identifier="philhealth" data-philhealth-input class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">Senior citizen ID number</label>
-        <input type="text" name="senior_id_number" value="{{ $seniorIdNumberValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="senior_id_number" value="{{ $seniorIdNumberValue }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">PWD ID number</label>
-        <input type="text" name="pwd_id_number" value="{{ $pwdIdNumberValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="pwd_id_number" value="{{ $pwdIdNumberValue }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>
@@ -122,7 +127,7 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-slate-700">HMO member ID</label>
-        <input type="text" name="hmo_member_id" value="{{ $hmoMemberIdValue }}" maxlength="100" autocomplete="off" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+        <input type="text" name="hmo_member_id" value="{{ $hmoMemberIdValue }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
     </div>
 
     <div>

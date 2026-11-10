@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use App\Services\PatientConsentService;
+use App\Services\PhilippineAddressDataset;
 use Tests\TestCase;
 
 class PatientAccessParityApiTest extends TestCase
@@ -29,6 +30,85 @@ class PatientAccessParityApiTest extends TestCase
     {
         parent::setUp();
         $this->seed(HimsSeeder::class);
+    }
+
+    public function test_patient_identifier_numbers_are_normalized_on_api_create_and_update(): void
+    {
+        $registration = $this->userWithRole('registration');
+        $response = $this->actingAs($registration)->postJson('/api/v1/patients', [
+            'first_name' => 'Identifier',
+            'last_name' => 'Patient',
+            'date_of_birth' => '1990-05-15',
+            'sex' => 'Female',
+            'civil_status' => 'Single',
+            'data_privacy_consent' => true,
+            'philhealth_number' => '1234-5678 9012',
+            'senior_id_number' => '123-456',
+            'pwd_id_number' => '789 012',
+            'hmo_member_id' => '345-678',
+        ])->assertCreated();
+
+        $patientId = $response->json('data.id');
+        $patient = Patient::findOrFail($patientId);
+        $this->assertSame('123456789012', $patient->philhealth_number);
+        $this->assertSame('123456', $patient->senior_id_number);
+        $this->assertSame('789012', $patient->pwd_id_number);
+        $this->assertSame('345678', $patient->hmo_member_id);
+
+        $this->actingAs($registration)->patchJson("/api/v1/patients/{$patientId}", [
+            'pwd_id_number' => '222-333',
+        ])->assertOk();
+        $this->assertSame('222333', $patient->fresh()->pwd_id_number);
+
+        $this->actingAs($registration)->patchJson("/api/v1/patients/{$patientId}", [
+            'hmo_member_id' => 'ABC-123',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('hmo_member_id');
+    }
+
+    public function test_patient_api_accepts_and_persists_ncr_address_without_a_province(): void
+    {
+        $registration = $this->userWithRole('registration');
+        $dataset = app(PhilippineAddressDataset::class);
+        $manila = collect($dataset->citiesByRegion('1300000000'))
+            ->firstWhere('name', 'City of Manila');
+        $district = $dataset->submunicipalities($manila['psgc_code'])[0];
+        $barangay = $dataset->barangays($district['psgc_code'])[0];
+
+        $address = [
+            'region' => 'National Capital Region (NCR)',
+            'region_psgc_code' => '1300000000',
+            'city' => $manila['name'],
+            'city_psgc_code' => $manila['psgc_code'],
+            'submunicipality' => $district['name'],
+            'submunicipality_psgc_code' => $district['psgc_code'],
+            'barangay' => $barangay['name'],
+            'barangay_psgc_code' => $barangay['psgc_code'],
+        ];
+
+        $response = $this->actingAs($registration)->postJson('/api/v1/patients', [
+            'first_name' => 'NCR',
+            'last_name' => 'Patient',
+            'date_of_birth' => '1990-05-15',
+            'sex' => 'Female',
+            'data_privacy_consent' => true,
+            'address' => $address,
+        ])->assertCreated();
+
+        $patient = Patient::findOrFail($response->json('data.id'));
+        $savedAddress = $patient->primaryAddress();
+        $this->assertSame($address['region_psgc_code'], $savedAddress->region_psgc_code);
+        $this->assertSame($address['region'], $savedAddress->region);
+        $this->assertNull($savedAddress->province_psgc_code);
+        $this->assertNull($savedAddress->province);
+        $this->assertSame($address['city_psgc_code'], $savedAddress->city_psgc_code);
+        $this->assertSame($address['city'], $savedAddress->city);
+        $this->assertSame($address['submunicipality_psgc_code'], $savedAddress->submunicipality_psgc_code);
+        $this->assertSame($address['barangay_psgc_code'], $savedAddress->barangay_psgc_code);
+
+        $this->actingAs($registration)->patchJson("/api/v1/patients/{$patient->id}", [
+            'address' => $address,
+        ])->assertOk();
     }
 
     public function test_triage_api_requires_override_reason_and_blocks_patient_role(): void

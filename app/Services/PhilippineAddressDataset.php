@@ -2,14 +2,11 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Illuminate\Validation\ValidationException;
 
 class PhilippineAddressDataset
 {
-    private const CACHE_PREFIX = 'psgc.dataset.index.';
-
     public function regions(): array
     {
         return $this->byLevel('region');
@@ -55,22 +52,30 @@ class PhilippineAddressDataset
 
     public function row(string $code): array
     {
-        return $this->index()['by_code'][$code] ?? abort(404);
+        return $this->findRow($code) ?? abort(404);
     }
 
     public function children(string $parentCode, array $levels): array
     {
-        $index = $this->index();
+        $rows = [];
+        foreach ($this->rows() as $row) {
+            if ($row['parent_psgc_code'] === $parentCode
+                && in_array($row['geographic_level'], $levels, true)) {
+                $rows[] = $row;
+            }
+        }
 
-        return array_values(array_filter(
-            $index['children'][$parentCode] ?? [],
-            static fn (array $row): bool => in_array($row['geographic_level'], $levels, true)
-        ));
+        return $rows;
     }
 
     public function descendants(): array
     {
-        return $this->index()['by_code'];
+        $rows = [];
+        foreach ($this->rows() as $row) {
+            $rows[$row['psgc_code']] = $row;
+        }
+
+        return $rows;
     }
 
     public function validateSelection(array $selection): array
@@ -100,10 +105,10 @@ class PhilippineAddressDataset
                 continue;
             }
 
-            if (! isset($this->index()['by_code'][$code])) {
+            $row = $this->findRow($code);
+            if ($row === null) {
                 $this->invalid($level, 'The selected PSGC code is not in the official dataset.');
             }
-            $row = $this->row($code);
             $allowedLevels = (array) $allowedLevels;
             if (! in_array($row['geographic_level'], $allowedLevels, true)) {
                 $this->invalid($level, 'The selected address level is invalid.');
@@ -190,7 +195,14 @@ class PhilippineAddressDataset
 
     private function byLevel(string $level): array
     {
-        return $this->index()['by_level'][$level] ?? [];
+        $rows = [];
+        foreach ($this->rows() as $row) {
+            if ($row['geographic_level'] === $level) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
     }
 
     private function requireLevel(string $code, string $level): array
@@ -208,74 +220,62 @@ class PhilippineAddressDataset
         ]);
     }
 
-    private function index(): array
+    private function findRow(string $code): ?array
+    {
+        foreach ($this->rows() as $row) {
+            if ($row['psgc_code'] === $code) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Read each CSV row on demand instead of retaining a multi-index cache of the whole dataset.
+     */
+    private function rows(): \Generator
     {
         $path = resource_path('data/psgc_2026_q2.csv');
         if (! is_file($path) || ! is_readable($path)) {
             throw new RuntimeException('The local PSGC dataset is missing or unreadable.');
         }
 
-        $cacheKey = self::CACHE_PREFIX.hash_file('sha256', $path);
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new RuntimeException('The local PSGC dataset could not be opened.');
+        }
 
-        return Cache::store('file')->rememberForever($cacheKey, function () use ($path): array {
-            $handle = fopen($path, 'rb');
-            if ($handle === false) {
-                throw new RuntimeException('The local PSGC dataset could not be opened.');
+        try {
+            $header = fgetcsv($handle);
+            if ($header !== ['psgc_code', 'name', 'geographic_level', 'parent_psgc_code', 'city_class']) {
+                throw new RuntimeException('The local PSGC dataset has an unexpected CSV header.');
             }
 
-            try {
-                $header = fgetcsv($handle);
-                if ($header !== ['psgc_code', 'name', 'geographic_level', 'parent_psgc_code', 'city_class']) {
-                    throw new RuntimeException('The local PSGC dataset has an unexpected CSV header.');
+            while (($values = fgetcsv($handle)) !== false) {
+                if (count($values) !== count($header)) {
+                    throw new RuntimeException('The local PSGC dataset contains a malformed row.');
                 }
 
-                $byCode = [];
-                $children = [];
-                $byLevel = [];
-                while (($values = fgetcsv($handle)) !== false) {
-                    if (count($values) !== count($header)) {
-                        throw new RuntimeException('The local PSGC dataset contains a malformed row.');
-                    }
-
-                    [$code, $name, $level, $parentCode, $cityClass] = $values;
-                    if (! preg_match('/^\d{10}$/', $code)
-                        || $name === ''
-                        || ! in_array($level, ['region', 'province', 'city', 'municipality', 'submunicipality', 'barangay'], true)
-                        || ($level === 'region' && $parentCode !== '')
-                        || ($level !== 'region' && $parentCode === '')) {
-                        throw new RuntimeException('The local PSGC dataset contains an invalid geographic row.');
-                    }
-
-                    $row = [
-                        'psgc_code' => $code,
-                        'name' => $name,
-                        'geographic_level' => $level,
-                        'parent_psgc_code' => $parentCode,
-                        'city_class' => $cityClass,
-                    ];
-                    $byCode[$code] = $row;
-                    $byLevel[$level][] = $row;
-                    if ($parentCode !== '') {
-                        $children[$parentCode][] = $row;
-                    }
+                [$code, $name, $level, $parentCode, $cityClass] = $values;
+                if (! preg_match('/^\d{10}$/', $code)
+                    || $name === ''
+                    || ! in_array($level, ['region', 'province', 'city', 'municipality', 'submunicipality', 'barangay'], true)
+                    || ($level === 'region' && $parentCode !== '')
+                    || ($level !== 'region' && $parentCode === '')) {
+                    throw new RuntimeException('The local PSGC dataset contains an invalid geographic row.');
                 }
 
-                foreach ($children as $parentCode => $rows) {
-                    foreach ($rows as $row) {
-                        if (! isset($byCode[$parentCode])) {
-                            throw new RuntimeException('The local PSGC dataset contains a row with an unknown parent.');
-                        }
-                    }
-                }
-
-                return [
-                    'by_code' => $byCode,
-                    'children' => $children,
-                    'by_level' => $byLevel,
+                yield [
+                    'psgc_code' => $code,
+                    'name' => $name,
+                    'geographic_level' => $level,
+                    'parent_psgc_code' => $parentCode,
+                    'city_class' => $cityClass,
                 ];
-            } finally {
-                fclose($handle);
             }
-        });
+        } finally {
+            fclose($handle);
+        }
     }
 }

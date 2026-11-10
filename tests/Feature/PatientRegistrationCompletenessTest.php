@@ -40,11 +40,11 @@ class PatientRegistrationCompletenessTest extends TestCase
             'sex' => 'Female',
             'religion' => 'Christian',
             'occupation' => 'Teacher',
-            'philhealth_number' => '12 345678901 2',
-            'senior_id_number' => 'SENIOR-123',
-            'pwd_id_number' => 'PWD-123',
+            'philhealth_number' => '12 3456-7890 12',
+            'senior_id_number' => '123-456',
+            'pwd_id_number' => '789 012',
             'hmo_name' => 'Example HMO',
-            'hmo_member_id' => 'MEMBER-123',
+            'hmo_member_id' => '345-678',
             'guarantor_name' => 'Guarantor Person',
             'guarantor_relationship' => 'Sibling',
             'guarantor_contact' => '09123456789',
@@ -64,14 +64,14 @@ class PatientRegistrationCompletenessTest extends TestCase
             ],
             'data_privacy_consent' => true,
         ])->assertCreated()
-            ->assertJsonPath('data.philhealth_number', '12 345678901 2')
-            ->assertJsonPath('data.hmo_member_id', 'MEMBER-123')
+            ->assertJsonPath('data.philhealth_number', '123456789012')
+            ->assertJsonPath('data.hmo_member_id', '345678')
             ->assertJsonPath('data.religion', 'Christian');
 
         $patient = Patient::findOrFail($response->json('data.id'));
-        $this->assertSame('12 345678901 2', $patient->philhealth_number);
-        $this->assertNotSame('12 345678901 2', DB::table('patients')->where('id', $patient->id)->value('philhealth_number'));
-        $this->assertSame('MEMBER-123', $patient->hmo_member_id);
+        $this->assertSame('123456789012', $patient->philhealth_number);
+        $this->assertNotSame('123456789012', DB::table('patients')->where('id', $patient->id)->value('philhealth_number'));
+        $this->assertSame('345678', $patient->hmo_member_id);
         $this->assertSame('1381300012', $patient->primaryAddress()->barangay_psgc_code);
 
         $this->actingAs($registration)->postJson('/api/v1/patients', [
@@ -134,6 +134,37 @@ class PatientRegistrationCompletenessTest extends TestCase
         $this->assertSame('1381300012', $portalPatient->fresh()->primaryAddress()->barangay_psgc_code);
     }
 
+    public function test_staff_registration_saves_shared_demographics_and_normalizes_identifiers(): void
+    {
+        $registration = $this->userWithRole('registration');
+
+        $this->actingAs($registration)->post(route('patients.store'), [
+            'first_name' => 'Staff',
+            'middle_name' => 'Form',
+            'last_name' => 'Patient',
+            'suffix' => 'Jr.',
+            'date_of_birth' => '1990-04-12',
+            'sex' => 'Not specified',
+            'civil_status' => 'Annulled/Divorced',
+            'philhealth_number' => '1234-5678 9012',
+            'senior_id_number' => '123-456',
+            'pwd_id_number' => '789 012',
+            'hmo_member_id' => '345-678',
+            'data_privacy_consent' => true,
+        ])->assertRedirect();
+
+        $patient = Patient::where('first_name', 'Staff')->firstOrFail();
+        $this->assertSame('Form', $patient->middle_name);
+        $this->assertSame('Jr.', $patient->suffix);
+        $this->assertSame('Not specified', $patient->sex);
+        $this->assertSame('Annulled/Divorced', $patient->civil_status);
+        $this->assertSame('Filipino', $patient->nationality);
+        $this->assertSame('123456789012', $patient->philhealth_number);
+        $this->assertSame('123456', $patient->senior_id_number);
+        $this->assertSame('789012', $patient->pwd_id_number);
+        $this->assertSame('345678', $patient->hmo_member_id);
+    }
+
     public function test_invalid_philhealth_format_and_forbidden_demographic_update_are_rejected(): void
     {
         $registration = $this->userWithRole('registration');
@@ -151,7 +182,7 @@ class PatientRegistrationCompletenessTest extends TestCase
             ->assertJsonValidationErrors('philhealth_number')
             ->assertJsonPath(
                 'errors.philhealth_number.0',
-                'The PhilHealth number must contain exactly 12 digits; spaces or dashes may be used for readability.'
+                'Please enter exactly 12 numbers. Spaces or dashes may be used for readability.'
             );
         $this->assertDatabaseMissing('patients', ['first_name' => 'Invalid']);
 
@@ -167,6 +198,8 @@ class PatientRegistrationCompletenessTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonValidationErrors([
                 'senior_id_number',
+                'pwd_id_number',
+                'hmo_member_id',
                 'address.postal_code',
                 'guarantor_contact',
                 'emergency_contact.phone',
@@ -175,9 +208,9 @@ class PatientRegistrationCompletenessTest extends TestCase
         $this->actingAs($registration)->postJson('/api/v1/patients', [
             ...$patientData,
             'philhealth_number' => '123456789012',
-            'senior_id_number' => 'SC-2026/01',
-            'pwd_id_number' => 'PWD #44-7',
-            'hmo_member_id' => 'HMO/ABC-123',
+            'senior_id_number' => '2026-01',
+            'pwd_id_number' => '44 7',
+            'hmo_member_id' => '123-456',
             'address' => [
                 'region' => 'National Capital Region (NCR)',
                 'region_psgc_code' => '1300000000',
@@ -242,7 +275,7 @@ class PatientRegistrationCompletenessTest extends TestCase
             ]);
     }
 
-    public function test_profile_renders_digits_only_philhealth_and_postal_inputs_and_permissive_id_inputs(): void
+    public function test_profile_and_staff_registration_render_numeric_identifier_inputs(): void
     {
         $patientUser = $this->userWithRole('patient');
         $patient = Patient::factory()->create(['user_id' => $patientUser->id]);
@@ -251,17 +284,18 @@ class PatientRegistrationCompletenessTest extends TestCase
         $this->actingAs($patientUser)->get(route('patients.profile'))
         ->assertOk()
         ->assertSee('name="philhealth_number"', false)
-        ->assertSee('inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input', false)
+        ->assertSee('inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="23" data-patient-identifier="philhealth"', false)
         ->assertSee('name="address[postal_code]"', false)
         ->assertSee('pattern="[0-9]{4}" maxlength="4" data-digits-only', false)
         ->assertSee('name="senior_id_number"', false)
+        ->assertSee('inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier', false)
         ->assertSee('name="pwd_id_number"', false)
         ->assertSee('name="hmo_member_id"', false);
 
         $registration = $this->userWithRole('registration');
         $this->actingAs($registration)->get(route('patients.index'))
         ->assertOk()
-        ->assertSee('inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input', false)
+        ->assertSee('inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="23" data-patient-identifier="philhealth"', false)
         ->assertSee('pattern="[0-9]{4}" maxlength="4" data-digits-only', false);
     }
 
@@ -439,8 +473,8 @@ class PatientRegistrationCompletenessTest extends TestCase
     {
         $patient = Patient::factory()->create([
             'philhealth_number' => '123456789012',
-            'senior_id_number' => 'SENIOR-SECRET',
-            'hmo_member_id' => 'HMO-SECRET',
+            'senior_id_number' => '123456',
+            'hmo_member_id' => '789012',
             'guarantor_name' => 'Private Guarantor',
         ]);
 
@@ -483,7 +517,7 @@ class PatientRegistrationCompletenessTest extends TestCase
         $doctor = User::where('email', 'doctor@coor.test')->firstOrFail();
         $registration = $this->userWithRole('registration');
         $patient = Patient::factory()->create([
-            'senior_id_number' => 'SENIOR-123',
+            'senior_id_number' => '123-456',
             'senior_id_verified_by' => $registration->id,
             'senior_id_verified_at' => now(),
             'pwd_id_number' => null,

@@ -14,8 +14,8 @@ class PatientIdentifierNumber implements ValidationRule
         }
 
         if (! is_string($value)
-            || ! preg_match('/^(?=.*[\pL\pN])[\pL\pN\pP\pS\s]+$/u', $value)) {
-            $fail('The :attribute may contain letters, numbers, spaces, and punctuation only.');
+            || ! preg_match('/^[0-9]+(?:[ -]?[0-9]+)*$/', $value)) {
+            $fail('Please enter numbers only. Spaces or dashes may be used for readability.');
         }
     }
 }

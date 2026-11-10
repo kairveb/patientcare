@@ -150,8 +150,8 @@ class OpdWorkflowIntegrationTest extends TestCase
         $this->actingAs($doctor)->get(route('encounters.show', $encounter))
             ->assertOk()
             ->assertSee('Request Inpatient Admission')
-            ->assertSee('History of Present Illness *')
-            ->assertSee('Primary Diagnosis — ICD-10 Code *');
+            ->assertSee('History of Present Illness <span class="hims-required" aria-hidden="true">*</span>', false)
+            ->assertSee('Primary Diagnosis — ICD-10 Code <span class="hims-required" aria-hidden="true">*</span>', false);
         $this->actingAs($nurse)->get(route('encounters.show', $encounter))
             ->assertOk()
             ->assertDontSee('Request Inpatient Admission')

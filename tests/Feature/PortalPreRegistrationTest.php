@@ -76,8 +76,8 @@ class PortalPreRegistrationTest extends TestCase
                 'address_postal' => '1100',
             ]);
 
-        $postResponse->assertSessionHasErrors('data_privacy_consent');
-        $this->assertSame(0, $patient->preArrivalProfiles()->count());
+        $postResponse->assertRedirect(route('patients.portal'));
+        $this->assertSame(1, $patient->preArrivalProfiles()->count());
 
         $postResponse = $this->withSession(['_token' => 'test-token'])
             ->actingAs($user, 'web')
@@ -156,9 +156,7 @@ class PortalPreRegistrationTest extends TestCase
             'verified' => true,
         ]);
 
-        $response = $this->withSession(['_token' => 'test-token'])
-            ->actingAs($user, 'web')
-            ->post('/portal/pre-register', [
+        $payload = [
                 '_token' => 'test-token',
                 'first_name' => 'Jane',
                 'last_name' => 'Patient',
@@ -177,6 +175,21 @@ class PortalPreRegistrationTest extends TestCase
                 'emergency_name' => 'John Patient',
                 'emergency_phone' => '09170000099',
                 'emergency_relationship' => 'Spouse',
+            ];
+
+        $this->actingAs($user, 'web')->get('/portal/pre-register')
+            ->assertOk()
+            ->assertSee('name="data_privacy_consent"', false);
+
+        $this->withSession(['_token' => 'test-token'])
+            ->actingAs($user, 'web')
+            ->post('/portal/pre-register', $payload)
+            ->assertSessionHasErrors('data_privacy_consent');
+
+        $response = $this->withSession(['_token' => 'test-token'])
+            ->actingAs($user, 'web')
+            ->post('/portal/pre-register', [
+                ...$payload,
                 'data_privacy_consent' => '1',
             ]);
 

@@ -27,6 +27,50 @@ if (echoConfig.VITE_REVERB_APP_KEY && echoConfig.VITE_REVERB_HOST) {
     });
 }
 
+const enforceDigitOnlyInput = (input, maximumDigits) => {
+    const sanitize = (value) => value.replace(/\D/g, '').slice(0, maximumDigits);
+
+    input.value = sanitize(input.value);
+    input.addEventListener('input', () => {
+        input.value = sanitize(input.value);
+    });
+    input.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const pasted = event.clipboardData?.getData('text') ?? '';
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? start;
+        const insertedLength = sanitize(pasted).length;
+        const nextValue = sanitize(
+            input.value.slice(0, start) + pasted + input.value.slice(end)
+        );
+        input.value = nextValue;
+        const caret = Math.min(start + insertedLength, nextValue.length);
+        input.setSelectionRange(caret, caret);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+};
+
+const enforcePatientIdentifierInput = (input) => {
+    const isPhilHealth = input.dataset.patientIdentifier === 'philhealth';
+    const message = 'Please enter numbers only. Spaces or dashes may be used for readability.';
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute(
+        'pattern',
+        isPhilHealth ? '[0-9](?:[ -]?[0-9]){11}' : '[0-9]+(?:[ -]?[0-9]+)*'
+    );
+
+    input.addEventListener('input', () => {
+        const hadInvalidCharacters = /[^0-9 -]/.test(input.value);
+        input.value = input.value.replace(/[^0-9 -]/g, '');
+        input.setCustomValidity(hadInvalidCharacters ? message : '');
+    });
+    input.addEventListener('invalid', () => {
+        if (input.validity.patternMismatch || input.validity.customError) {
+            input.setCustomValidity(message);
+        }
+    });
+};
+
 const enforcePhilippinePhoneInput = (input) => {
     if (!(input instanceof HTMLInputElement)) {
         return;
@@ -48,35 +92,28 @@ const enforcePhilippinePhoneInput = (input) => {
         return digitsOnly.slice(0, 11);
     };
 
-    const enforceDigitOnlyInput = (input, maximumDigits) => {
-        const sanitize = (value) => value.replace(/\D/g, '').slice(0, maximumDigits);
-
-        input.value = sanitize(input.value);
-        input.addEventListener('input', () => {
-            input.value = sanitize(input.value);
-        });
-        input.addEventListener('paste', (event) => {
-            event.preventDefault();
-            const pasted = event.clipboardData?.getData('text') ?? '';
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? start;
-            const insertedLength = sanitize(pasted).length;
-            const nextValue = sanitize(
-                input.value.slice(0, start) + pasted + input.value.slice(end)
-            );
-            input.value = nextValue;
-            const caret = Math.min(start + insertedLength, nextValue.length);
-            input.setSelectionRange(caret, caret);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        });
-    };
-
     input.setAttribute('inputmode', 'numeric');
     input.setAttribute('autocomplete', 'tel');
     input.setAttribute('pattern', '^(09\\d{9}|\\+639\\d{9})$');
 
     input.addEventListener('input', () => {
         input.value = formatValue(input.value);
+    });
+};
+
+const initializeRequiredAsterisks = () => {
+    document.querySelectorAll('input[required], select[required], textarea[required]').forEach((control) => {
+        const label = control.closest('label')
+            || [...document.querySelectorAll('label[for]')].find((candidate) => candidate.htmlFor === control.id);
+        if (!label || label.querySelector('.hims-required')) {
+            return;
+        }
+
+        const marker = document.createElement('span');
+        marker.className = 'hims-required';
+        marker.setAttribute('aria-hidden', 'true');
+        marker.textContent = '*';
+        label.append(' ', marker);
     });
 };
 
@@ -347,8 +384,9 @@ const initializeAppointmentSlotPickers = () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('input[data-phone-input]').forEach(enforcePhilippinePhoneInput);
-    document.querySelectorAll('input[data-philhealth-input]').forEach((input) => enforceDigitOnlyInput(input, 12));
     document.querySelectorAll('input[data-digits-only]').forEach((input) => enforceDigitOnlyInput(input, Number(input.maxLength) || 4));
+    document.querySelectorAll('input[data-patient-identifier]').forEach(enforcePatientIdentifierInput);
+    initializeRequiredAsterisks();
     initializeFilterPanels();
     initializeAppointmentSlotPickers();
     listenForEmergencyAlerts();

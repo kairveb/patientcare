@@ -26,17 +26,22 @@
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">First name</label>
-                    <input type="text" name="first_name" value="{{ old('first_name', $patient->first_name) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2" required>
+                    <input type="text" name="first_name" value="{{ old('first_name', $patient->first_name) }}" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2" required>
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Middle name</label>
-                    <input type="text" name="middle_name" value="{{ old('middle_name', $patient->middle_name) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="middle_name" value="{{ old('middle_name', $patient->middle_name) }}" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Last name</label>
-                    <input type="text" name="last_name" value="{{ old('last_name', $patient->last_name) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2" required>
+                    <input type="text" name="last_name" value="{{ old('last_name', $patient->last_name) }}" maxlength="255" class="w-full rounded-lg border border-slate-300 px-3 py-2" required>
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-slate-700">Suffix</label>
+                    <input type="text" name="suffix" value="{{ old('suffix', $patient->suffix) }}" maxlength="20" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
@@ -48,9 +53,9 @@
                     <label class="mb-1 block text-sm font-medium text-slate-700">Sex</label>
                     <select name="sex" class="w-full rounded-lg border border-slate-300 px-3 py-2" required>
                         <option value="">Select</option>
-                        <option value="Male" {{ old('sex', $patient->sex) === 'Male' ? 'selected' : '' }}>Male</option>
-                        <option value="Female" {{ old('sex', $patient->sex) === 'Female' ? 'selected' : '' }}>Female</option>
-                        <option value="Other" {{ old('sex', $patient->sex) === 'Other' ? 'selected' : '' }}>Other</option>
+                        @foreach (config('patient.sex_options') as $sexOption)
+                            <option value="{{ $sexOption }}" @selected(old('sex', $patient->sex) === $sexOption)>{{ $sexOption }}</option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -68,7 +73,7 @@
                     <label class="mb-1 block text-sm font-medium text-slate-700">Civil status</label>
                     <select name="civil_status" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                         <option value="">Select civil status</option>
-                        @foreach (['Single', 'Married', 'Widowed', 'Separated', 'Annulled/Divorced'] as $civilStatus)
+                        @foreach (config('patient.civil_status_options') as $civilStatus)
                             <option value="{{ $civilStatus }}" @selected(old('civil_status', $patient->civil_status) === $civilStatus)>{{ $civilStatus }}</option>
                         @endforeach
                     </select>
@@ -76,7 +81,7 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Nationality</label>
-                    <input type="text" name="nationality" value="{{ old('nationality') ?: ($patient->nationality ?: 'Filipino') }}" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="nationality" value="{{ old('nationality') ?: ($patient->nationality ?: config('patient.nationality_default')) }}" maxlength="100" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
@@ -91,17 +96,17 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">PhilHealth number</label>
-                    <input type="text" name="philhealth_number" value="{{ old('philhealth_number', $patient->philhealth_number) }}" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" data-philhealth-input class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="philhealth_number" value="{{ old('philhealth_number', $patient->philhealth_number) }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="23" data-patient-identifier="philhealth" data-philhealth-input class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Senior citizen ID number</label>
-                    <input type="text" name="senior_id_number" value="{{ old('senior_id_number', $patient->senior_id_number) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="senior_id_number" value="{{ old('senior_id_number', $patient->senior_id_number) }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">PWD ID number</label>
-                    <input type="text" name="pwd_id_number" value="{{ old('pwd_id_number', $patient->pwd_id_number) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="pwd_id_number" value="{{ old('pwd_id_number', $patient->pwd_id_number) }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
@@ -111,7 +116,7 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">HMO member ID</label>
-                    <input type="text" name="hmo_member_id" value="{{ old('hmo_member_id', $patient->hmo_member_id) }}" maxlength="100" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input type="text" name="hmo_member_id" value="{{ old('hmo_member_id', $patient->hmo_member_id) }}" inputmode="numeric" pattern="[0-9]+(?:[ -]?[0-9]+)*" maxlength="100" autocomplete="off" data-patient-identifier class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
                 <div>
