@@ -127,6 +127,7 @@
                             $priorityScore = (int) ($assessment->priority_score ?? 5);
                             $priorityLabel = App\Support\PriorityColor::label($priorityScore);
                             $colorClass = App\Support\PriorityColor::variant($priorityScore);
+                            $severityCategory = $assessment->severity_category;
                             $statusValue = $assessment->status ?? null;
                             $statusBadgeClass = App\Support\QueueStatus::variant($statusValue);
                             $statusLabel = App\Support\QueueStatus::label($statusValue);
@@ -137,6 +138,7 @@
                             <td class="px-5 py-4">
                                 <div class="flex flex-col gap-2">
                                     <span class="status-pill {{ $colorClass }}">{{ $priorityLabel }}</span>
+                                    <span class="text-xs font-semibold {{ $severityCategory === 'Severe (critical)' ? 'text-rose-700' : 'text-emerald-700' }}">{{ $severityCategory }}</span>
                                     @if ($statusValue)
                                         <span class="status-pill {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
                                     @endif
@@ -228,7 +230,7 @@
                 <div class="modal-body px-5 py-5">
                     <div class="space-y-4 text-sm text-slate-700">
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div><span class="text-slate-500">Priority:</span> <span class="ml-1 status-pill {{ App\Support\PriorityColor::variant((int) ($assessment->priority_score ?? 5)) }}">{{ App\Support\PriorityColor::label((int) ($assessment->priority_score ?? 5)) }}</span></div>
+                            <div><span class="text-slate-500">Priority:</span> <span class="ml-1 status-pill {{ App\Support\PriorityColor::variant((int) ($assessment->priority_score ?? 5)) }}">{{ App\Support\PriorityColor::label((int) ($assessment->priority_score ?? 5)) }}</span><span class="ml-2 font-semibold">{{ $assessment->severity_category }}</span></div>
                             <div><span class="text-slate-500">Status:</span> <span class="ml-1 status-pill {{ App\Support\QueueStatus::variant($assessment->status ?? null) }}">{{ App\Support\QueueStatus::label($assessment->status ?? null) }}</span></div>
                             <div><span class="text-slate-500">Pain score:</span> <span class="font-medium">{{ $assessment->pain_score ?? '—' }}/10</span></div>
                             <div><span class="text-slate-500">Time:</span> <span class="font-medium">{{ $assessment->triaged_at?->format('M d, Y g:i A') ?? '—' }}</span></div>
@@ -263,6 +265,7 @@
                             <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <div class="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Priority</div>
                                 <div class="mt-2 font-semibold text-slate-900">{{ App\Support\PriorityColor::label((int) ($assessment->priority_score ?? 5)) }}</div>
+                                <div class="mt-1 text-xs font-semibold">{{ $assessment->severity_category }}</div>
                             </div>
                             <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <div class="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Status</div>

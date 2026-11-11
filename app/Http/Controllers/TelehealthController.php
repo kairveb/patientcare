@@ -53,11 +53,15 @@ class TelehealthController extends Controller
 
         if ($searchQuery !== '') {
             $query->whereHas('appointment.patient', function ($patientQuery) use ($searchQuery) {
-                $patientQuery->where(function ($inner) use ($searchQuery) {
-                    $search = '%' . strtolower($searchQuery) . '%';
-                    $inner->whereRaw('LOWER(first_name) LIKE ?', [$search])
-                        ->orWhereRaw('LOWER(last_name) LIKE ?', [$search])
-                        ->orWhereRaw('LOWER(CONCAT(first_name, " ", last_name)) LIKE ?', [$search]);
+                $terms = preg_split('/\s+/', mb_strtolower($searchQuery), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $patientQuery->where(function ($inner) use ($terms) {
+                    foreach ($terms as $term) {
+                        $search = '%'.$term.'%';
+                        $inner->where(function ($nameQuery) use ($search) {
+                            $nameQuery->whereRaw('LOWER(first_name) LIKE ?', [$search])
+                                ->orWhereRaw('LOWER(last_name) LIKE ?', [$search]);
+                        });
+                    }
                 });
             });
         }

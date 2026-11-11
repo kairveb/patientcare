@@ -38,9 +38,10 @@
         <select name="provider_id" data-slot-provider data-provider-select required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
             <option value="">Select provider</option>
             @foreach ($providers as $provider)
-                <option value="{{ $provider->id }}" data-department-id="{{ $provider->department_id }}" data-accepts-virtual="{{ $provider->accepts_virtual ? '1' : '0' }}">{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
+                <option value="{{ $provider->id }}" data-department-id="{{ $provider->department_id }}" data-accepts-virtual="{{ $provider->accepts_virtual ? '1' : '0' }}" data-bio="{{ $provider->bio }}">{{ $provider->full_name }} — {{ $provider->department->name ?? 'General' }}</option>
             @endforeach
         </select>
+        <p data-provider-bio class="mt-2 hidden text-sm leading-6 text-slate-600"></p>
         <p data-no-providers-message class="mt-2 hidden text-sm text-amber-700" role="status">No providers available for this department.</p>
     </div>
 

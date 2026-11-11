@@ -6,6 +6,8 @@ use App\Events\EmergencyQueueAlert;
 use App\Models\ErQueue;
 use App\Models\TriageAssessment;
 use App\Models\TriageReassessment;
+use App\Models\User;
+use App\Notifications\EmergencyQueueNotification;
 
 class EmergencyAlertService
 {
@@ -28,7 +30,9 @@ class EmergencyAlertService
             return;
         }
 
-        EmergencyQueueAlert::dispatch('Critical or severe triage assessment recorded.', $priority);
+        $message = 'Critical or severe triage assessment recorded.';
+        EmergencyQueueAlert::dispatch($message, $priority, 'Critical');
+        $this->notifyClinicalTeam($message, $priority);
     }
 
     public function triageReassessmentMoreSevere(TriageReassessment $reassessment): void
@@ -41,9 +45,16 @@ class EmergencyAlertService
             default => 'Level 5',
         };
 
-        EmergencyQueueAlert::dispatch(
-            'AI reassessment suggests a more severe level; nurse/doctor review is required.',
-            $level
-        );
+        $message = 'AI reassessment suggests a more severe level; nurse/doctor review is required.';
+        EmergencyQueueAlert::dispatch($message, $level, 'Critical');
+        $this->notifyClinicalTeam($message, $level);
+    }
+
+    private function notifyClinicalTeam(string $message, ?string $triageLevel): void
+    {
+        User::query()
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['nurse', 'doctor', 'registration', 'super-admin']))
+            ->get()
+            ->each(fn (User $user) => $user->notify(new EmergencyQueueNotification($message, $triageLevel)));
     }
 }

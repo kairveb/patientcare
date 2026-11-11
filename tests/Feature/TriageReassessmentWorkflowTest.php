@@ -61,7 +61,9 @@ class TriageReassessmentWorkflowTest extends TestCase
             'user_id' => $nurse->id,
         ]);
         Event::assertDispatched(EmergencyQueueAlert::class, fn (EmergencyQueueAlert $event): bool =>
-            $event->priority === 'Level 1' && str_contains($event->message, 'more severe')
+            $event->triageLevel === 'Level 1'
+            && $event->priority === 'Critical'
+            && str_contains($event->message, 'more severe')
         );
 
         $this->actingAs($nurse)->get(route('emergency.show', $visit))

@@ -9,6 +9,11 @@
             <div>
                 <p class="font-semibold">{{ $provider->full_name }}</p>
                 <p class="text-sm text-slate-600">{{ $provider->specialties->pluck('name')->join(', ') }} · {{ $provider->department?->name ?? 'General' }}</p>
+                @if (blank($provider->bio))
+                    <span class="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Missing bio</span>
+                @else
+                    <p class="mt-2 max-w-2xl text-sm text-slate-600">{{ \Illuminate\Support\Str::limit($provider->bio, 180) }}</p>
+                @endif
             </div>
             <a href="{{ route('providers.profile.edit', $provider) }}" class="rounded-lg border border-teal-700 px-4 py-2 text-center text-sm font-semibold text-teal-800">Edit profile</a>
         </div>

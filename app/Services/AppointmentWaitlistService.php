@@ -44,7 +44,9 @@ class AppointmentWaitlistService
             if ($patientUser) {
                 $patientUser->notify(new AppointmentJourneyNotification(
                     'An appointment slot opened',
-                    'A matching appointment slot is available for '.$slot->starts_at->format('M j, Y g:i A').'. Please contact registration to book it.',
+                    'A matching appointment slot is available for '.$slot->starts_at->format('M j, Y g:i A').'. Book online using the link below.',
+                    null,
+                    route('doctors.show', $provider),
                 ));
             }
             $offered++;

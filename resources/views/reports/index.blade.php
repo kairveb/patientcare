@@ -29,6 +29,8 @@
                 <div class="mt-4 flex gap-2">
                     <a href="{{ route('reports.export', ['report' => $route, 'format' => 'csv', ...request()->query()]) }}" class="rounded bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white">CSV</a>
                     <a href="{{ route('reports.export', ['report' => $route, 'format' => 'pdf', ...request()->query()]) }}" class="rounded bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white">PDF</a>
+                    <a href="{{ route('reports.export', ['report' => $route, 'format' => 'txt', ...request()->query()]) }}" class="rounded bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white">TXT</a>
+                    <a href="{{ route('reports.export', ['report' => $route, 'format' => 'xls', ...request()->query()]) }}" class="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white">XLS</a>
                 </div>
             </article>
         @endforeach
@@ -46,7 +48,7 @@
                 @endif
                 <p class="mt-2 text-sm leading-6 text-slate-600">{{ $description }}</p>
                 <div class="mt-4 flex gap-2">
-                    @foreach (['csv', 'pdf'] as $format)
+                    @foreach (['csv', 'pdf', 'txt', 'xls'] as $format)
                         <a href="{{ route('reports.export', ['report' => $slug, 'format' => $format, ...request()->query()]) }}" class="rounded bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white">{{ strtoupper($format) }}</a>
                     @endforeach
                 </div>
@@ -57,7 +59,7 @@
                 <a href="{{ route('reports.ai-evaluation', request()->query()) }}" class="font-semibold text-slate-800">AI evaluation and monitoring</a>
                 <p class="mt-2 text-sm leading-6 text-slate-600">Clinician agreement and triage safety monitoring.</p>
                 <div class="mt-4 flex gap-2">
-                    @foreach (['csv', 'pdf'] as $format)
+                    @foreach (['csv', 'pdf', 'txt', 'xls'] as $format)
                         <a href="{{ route('reports.export', ['report' => 'ai-evaluation-dataset', 'format' => $format, ...request()->query()]) }}" class="rounded bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white">{{ strtoupper($format) }}</a>
                     @endforeach
                 </div>

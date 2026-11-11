@@ -49,6 +49,9 @@ class ProviderAvailabilityUiTest extends TestCase
     public function test_demo_provider_and_slot_seeder_is_idempotent_and_assigns_doctor_roles(): void
     {
         $this->seed(DemoProvidersAndSlotsSeeder::class);
+        $provider = Provider::query()->where('display_name', 'Dr. Gabriel Lim')->firstOrFail();
+        $this->assertNotEmpty($provider->bio);
+        $provider->update(['bio' => 'Keep this clinician-authored description.']);
         $providerCount = Provider::query()->count();
         $slotCount = AppointmentSlot::query()->count();
 
@@ -56,6 +59,7 @@ class ProviderAvailabilityUiTest extends TestCase
 
         $this->assertSame($providerCount, Provider::query()->count());
         $this->assertSame($slotCount, AppointmentSlot::query()->count());
+        $this->assertSame('Keep this clinician-authored description.', $provider->fresh()->bio);
         $this->assertDatabaseHas('providers', [
             'display_name' => 'Dr. Gabriel Lim',
             'active' => true,
@@ -74,5 +78,18 @@ class ProviderAvailabilityUiTest extends TestCase
             ->get(route('doctors.index'))
             ->assertOk()
             ->assertSee('hims-filter-bar hims-filter-bar--grid');
+    }
+
+    public function test_staff_provider_list_flags_missing_bios(): void
+    {
+        $provider = Provider::factory()->create(['bio' => null]);
+        $nurse = User::factory()->create();
+        $nurse->roles()->attach(\App\Models\Role::firstOrCreate(['name' => 'nurse'], ['label' => 'Nurse']));
+
+        $this->actingAs($nurse)
+            ->get(route('providers.profiles'))
+            ->assertOk()
+            ->assertSee('Missing bio')
+            ->assertSee($provider->full_name);
     }
 }

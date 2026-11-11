@@ -8,6 +8,7 @@
         <h1 class="text-2xl font-bold text-slate-800">Pre-booking AI Symptom Checker</h1>
         <p class="mt-1 text-sm text-slate-600">Share the current symptoms and optional vital signs to receive a care-routing suggestion.</p>
     </div>
+    @include('components.ai-triage-note')
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         If an external AI provider is enabled, your symptom description is sent to that provider for triage support. The system masks names, contact details, reference codes, and obvious identifiers first; it sends age range and sex only when configured. The application saves a triage record, including the submitted symptoms, for care continuity. The external provider may process the request under its own terms.
     </div>

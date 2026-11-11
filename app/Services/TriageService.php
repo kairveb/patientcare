@@ -207,6 +207,7 @@ class TriageService
             'score' => $ai['score'],
             'severity_score' => $ai['severity_score'],
             'priority' => $ai['priority'],
+            'severity_category' => $ai['severity_category'],
             'priority_band' => $ai['priority_band'],
             'color' => $ai['color'],
             'confidence' => $ai['confidence'],

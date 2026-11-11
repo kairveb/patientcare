@@ -7,6 +7,7 @@
 
 @section('content')
 <div class="mx-auto max-w-7xl space-y-6">
+    @include('components.ai-triage-note')
     <div class="panel-card p-6">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -238,6 +239,7 @@
             const color = result.color || 'green';
             const severityScore = result.severity_score ?? 0;
             const priorityBand = result.priority_band || 'Green';
+            const severityCategory = result.severity_category || (['Emergency', 'Urgent'].includes(priority) ? 'Severe (critical)' : 'Not Severe');
             const badgeClasses = {
                 red: 'bg-rose-600 text-white',
                 yellow: 'bg-amber-500 text-slate-900',
@@ -262,6 +264,7 @@
             preview.innerHTML = `
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${badgeClasses[color] || badgeClasses.green}">${priority}</span>
+                    <span class="text-xs font-semibold">${severityCategory}</span>
                     <span class="text-xs font-medium text-slate-500">Confidence ${confidence}%</span>
                 </div>
                 <div class="space-y-3 text-sm text-slate-700">

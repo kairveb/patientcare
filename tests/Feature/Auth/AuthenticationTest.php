@@ -59,9 +59,10 @@ class AuthenticationTest extends TestCase
         $this->assertTrue(config('session.expire_on_close'));
     }
 
-    public function test_inactivity_timeout_is_set_to_five_minutes(): void
+    public function test_inactivity_timeout_and_laravel_session_lifetime_are_twenty_minutes(): void
     {
-        $this->assertSame(5, config('security.session_idle_minutes'));
+        $this->assertSame(20, config('security.session_idle_minutes'));
+        $this->assertSame((int) env('SESSION_LIFETIME', 20), config('session.lifetime'));
     }
 
     public function test_heartbeat_keeps_user_logged_in_within_five_minute_window(): void
@@ -79,10 +80,10 @@ class AuthenticationTest extends TestCase
         $this->assertTrue($user->last_activity_at->diffInSeconds(now()) < 10);
     }
 
-    public function test_user_without_heartbeat_for_over_five_minutes_is_logged_out_on_next_request(): void
+    public function test_user_without_heartbeat_for_over_twenty_minutes_is_logged_out_on_next_request(): void
     {
         $user = User::factory()->create([
-            'last_activity_at' => now()->subSeconds(301),
+            'last_activity_at' => now()->subSeconds(1201),
         ]);
 
         $response = $this->actingAs($user, 'web')->get('/dashboard');
@@ -192,10 +193,22 @@ class AuthenticationTest extends TestCase
         $this->assertTrue($user->last_activity_at->diffInSeconds(now()) < 10);
     }
 
+    public function test_api_idle_timeout_returns_401_and_revokes_a_persisted_token_after_twenty_minutes(): void
+    {
+        $user = User::factory()->create(['last_activity_at' => now()->subSeconds(1201)]);
+        $token = $user->createToken('idle-timeout')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/v1/auth/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'You have been logged out due to inactivity.');
+
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
     public function test_stale_inactivity_logs_user_out_and_redirects_to_login(): void
     {
         $user = User::factory()->create([
-            'last_activity_at' => now()->subSeconds(301),
+            'last_activity_at' => now()->subSeconds(1201),
         ]);
 
         $response = $this->actingAs($user, 'web')->get('/dashboard');
@@ -242,7 +255,7 @@ class AuthenticationTest extends TestCase
         foreach (['super-admin', 'doctor', 'patient'] as $roleName) {
             $role = Role::firstOrCreate(['name' => $roleName], ['label' => ucfirst(str_replace('-', ' ', $roleName))]);
             $user = User::factory()->create([
-                'last_activity_at' => now()->subSeconds(901),
+                'last_activity_at' => now()->subSeconds(1201),
             ]);
             $user->roles()->attach($role->id);
 

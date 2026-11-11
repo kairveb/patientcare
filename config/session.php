@@ -32,7 +32,7 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    'lifetime' => (int) env('SESSION_LIFETIME', 20),
 
     // Closing the entire browser process ends the session, while a single tab
     // closing does not. Browsers share the same session cookie across all tabs and

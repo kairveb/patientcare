@@ -149,6 +149,9 @@ class AiTriageService
             'score' => $score,
             'severity_score' => $severityScoreMap[$score] ?? 22,
             'priority' => $priorityMap[$score],
+            'severity_category' => in_array($score, [self::LEVEL_EMERGENCY, self::LEVEL_URGENT], true)
+                ? 'Severe (critical)'
+                : 'Not Severe',
             'priority_band' => $priorityBandMap[$score] ?? 'Green',
             'color' => $colorMap[$score],
             'recommendation' => $recommendation,

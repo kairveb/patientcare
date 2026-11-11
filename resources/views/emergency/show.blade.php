@@ -28,7 +28,7 @@
             <div class="mt-4 p-3 bg-slate-50 rounded-lg">
                 <h4 class="text-sm font-medium text-slate-700 mb-2">ER Queue</h4>
                 <div class="flex justify-between text-sm">
-                    <span>Priority: <strong>{{ $visit->queue->priority }}</strong></span>
+                    <span>Priority: <strong>{{ $visit->queue->priority }}</strong><br><span class="text-xs">{{ $visit->triageAssessments->last()?->severity_category ?? 'Not Severe' }}</span></span>
                     <span>Status: {{ $visit->queue->status }}</span>
                     <span>Area: {{ $visit->queue->treatment_area ?? '—' }}</span>
                 </div>
@@ -246,7 +246,7 @@
                     @forelse ($visit->triageAssessments as $ta)
                         <tr class="border-b border-slate-100">
                             <td class="py-3 px-4">{{ $ta->triaged_at->format('M d, g:i A') }}</td>
-                            <td class="py-3 px-4"><span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">{{ $ta->priority }}</span></td>
+                            <td class="py-3 px-4"><span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">{{ $ta->priority }}</span><span class="ml-2 text-xs font-semibold">{{ $ta->severity_category }}</span></td>
                             <td class="py-3 px-4">{{ $ta->pain_score ?? '—' }}/10</td>
                             <td class="py-3 px-4 text-xs">
                                 @if ($ta->triageVital)

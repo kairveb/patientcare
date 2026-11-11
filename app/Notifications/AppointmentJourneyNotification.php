@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Appointment;
+use App\Support\NotificationMetadata;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -15,6 +16,7 @@ class AppointmentJourneyNotification extends Notification
         private readonly string $subject,
         private readonly string $message,
         private readonly ?Appointment $appointment = null,
+        private readonly ?string $url = null,
     ) {
     }
 
@@ -29,8 +31,9 @@ class AppointmentJourneyNotification extends Notification
             'title' => $this->subject,
             'message' => $this->message,
             'appointment_id' => $this->appointment?->id,
-            'url' => $this->appointment ? route('appointments.show', $this->appointment) : route('patients.portal.appointments'),
-        ];
+            'url' => $this->url
+                ?? ($this->appointment ? route('appointments.show', $this->appointment) : route('patients.portal.appointments')),
+        ] + NotificationMetadata::make('High', 'ASS');
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -40,6 +43,8 @@ class AppointmentJourneyNotification extends Notification
         if ($this->appointment) {
             $mail->line('Appointment: '.$this->appointment->appointment_number)
                 ->action('View appointment', route('appointments.show', $this->appointment));
+        } elseif ($this->url) {
+            $mail->action('Book this slot', $this->url);
         }
 
         return $mail;

@@ -31,6 +31,8 @@
                             Enter the 6-digit code from your authenticator app to continue.
                         @else
                             Enter the 6-digit code sent to {{ $maskedEmail }} to continue.
+                            <span class="mt-1 block">Code expires in <strong id="otp-countdown" data-expires-at="{{ $expiresAt }}">2:00</strong>.</span>
+                            <span id="otp-expired-message" class="mt-1 hidden font-medium text-red-700" role="alert">Your code expired. Sign in again to request a new one.</span>
                         @endif
                     </p>
                 </header>
@@ -84,4 +86,23 @@
             </div>
         </section>
     </main>
+    @if ($challengeMethod === 'email')
+        <script>
+            (() => {
+                const countdown = document.getElementById('otp-countdown');
+                const expiredMessage = document.getElementById('otp-expired-message');
+                if (!countdown || !expiredMessage) return;
+                const expiresAt = Number(countdown.dataset.expiresAt) * 1000;
+                const update = () => {
+                    const seconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+                    countdown.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+                    if (seconds === 0) {
+                        expiredMessage.classList.remove('hidden');
+                    }
+                };
+                update();
+                window.setInterval(update, 1000);
+            })();
+        </script>
+    @endif
 @endsection

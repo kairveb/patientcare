@@ -7,6 +7,7 @@ use App\Notifications\LoginOtpNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Validation\ValidationException;
 
 class LoginOtpService
@@ -33,7 +34,7 @@ class LoginOtpService
 
         $code = (string) random_int(0, 999999);
         $code = str_pad($code, 6, '0', STR_PAD_LEFT);
-        $ttl = (int) config('security.otp_ttl_minutes', 5);
+        $ttl = (int) config('security.otp_ttl_minutes', 2);
 
         DB::transaction(function () use ($user, $code, $ttl, $resend, $challengeHash): void {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
@@ -65,6 +66,38 @@ class LoginOtpService
         });
 
         $user->notify(new LoginOtpNotification($code, $ttl));
+    }
+
+    public function expireIfNeeded(User $user): int
+    {
+        return DB::transaction(function () use ($user): int {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            if (! $lockedUser->login_otp_hash
+                || ! $lockedUser->login_otp_expires_at
+                || ! $lockedUser->login_otp_expires_at->isPast()) {
+                return 0;
+            }
+
+            $this->clear($lockedUser, false);
+
+            return $this->lockForOtpFailure($lockedUser, 'expired');
+        });
+    }
+
+    public function lockoutRemaining(User $user): int
+    {
+        $key = $this->lockoutKey($user);
+
+        return RateLimiter::tooManyAttempts($key, 1)
+            ? RateLimiter::availableIn($key)
+            : 0;
+    }
+
+    public function markEmailAsVerified(User $user): void
+    {
+        if (! $user->hasVerifiedEmail() && $user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
     }
 
     public function issueApi(User $user): string
@@ -120,12 +153,14 @@ class LoginOtpService
 
         if ($user->login_otp_expires_at->isPast()) {
             $this->clear($user, false);
+            $this->lockForOtpFailure($user, 'expired');
 
             return self::EXPIRED;
         }
 
         if ((int) $user->login_otp_attempts >= (int) config('security.otp_max_attempts', 5)) {
             $this->clear($user, false);
+            $this->lockForOtpFailure($user, 'attempts_exhausted');
 
             return self::EXHAUSTED;
         }
@@ -136,6 +171,7 @@ class LoginOtpService
 
             if ($attempts >= (int) config('security.otp_max_attempts', 5)) {
                 $this->clear($user, false);
+                $this->lockForOtpFailure($user, 'attempts_exhausted');
 
                 return self::EXHAUSTED;
             }
@@ -146,6 +182,25 @@ class LoginOtpService
         $this->clear($user);
 
         return self::VERIFIED;
+    }
+
+    private function lockForOtpFailure(User $user, string $reason): int
+    {
+        $seconds = (int) config('security.otp_lockout_minutes', 5) * 60;
+        $key = $this->lockoutKey($user);
+        RateLimiter::clear($key);
+        RateLimiter::hit($key, $seconds);
+        app(AuditLogService::class)->log('OTP_LOCKOUT', 'authentication', $user->id, 'FAILURE', [
+            'reason' => $reason,
+            'lockout_seconds' => $seconds,
+        ]);
+
+        return $seconds;
+    }
+
+    private function lockoutKey(User $user): string
+    {
+        return 'login-otp-lock:user:'.$user->id;
     }
 
     public function clear(User $user, bool $resetAttempts = true): void

@@ -14,7 +14,9 @@
         <label class="text-xs text-slate-600">Start date<input type="date" name="start" value="{{ $start }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <label class="text-xs text-slate-600">End date<input type="date" name="end" value="{{ $end }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <button class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Apply filters</button>
-        <a href="{{ route('reports.export', ['report' => 'ai-evaluation-dataset', 'format' => 'csv', 'start' => $start, 'end' => $end]) }}" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Export evaluation dataset CSV</a>
+        @foreach (['csv', 'pdf', 'txt', 'xls'] as $format)
+            <a href="{{ route('reports.export', ['report' => 'ai-evaluation-dataset', 'format' => $format, 'start' => $start, 'end' => $end]) }}" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Export evaluation dataset {{ strtoupper($format) }}</a>
+        @endforeach
     </form>
     @if (session('success'))<p role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{{ session('success') }}</p>@endif
 

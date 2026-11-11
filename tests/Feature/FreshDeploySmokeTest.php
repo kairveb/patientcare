@@ -117,6 +117,13 @@ class FreshDeploySmokeTest extends TestCase
                 'password' => 'Password123!',
             ])->assertRedirect();
 
+            if ($roleName !== 'patient') {
+                $this->get(route('dashboard'))
+                    ->assertRedirect(route('confidentiality.notice'));
+                $this->post(route('confidentiality.acknowledge'), ['acknowledged' => '1'])
+                    ->assertRedirect(route('dashboard'));
+            }
+
             foreach ($pages as [$uri, $status]) {
                 $response = $this->get($uri);
                 $this->assertSame(

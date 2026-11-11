@@ -22,7 +22,7 @@ class ReportExportController extends Controller
     ): Response {
         Gate::authorize('view-reports');
         abort_unless($request->user()->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin']), 403);
-        abort_unless(in_array($format, ['csv', 'pdf'], true), 404);
+        abort_unless(in_array($format, ['csv', 'pdf', 'txt', 'xls'], true), 404);
 
         $filters = $request->validate([
             'start' => ['nullable', 'date_format:Y-m-d'],
@@ -59,6 +59,36 @@ class ReportExportController extends Controller
                 }
                 fclose($output);
             }, $report.'-report.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
+
+        if ($format === 'txt') {
+            return response()->streamDownload(function () use ($payload, $exports): void {
+                $output = fopen('php://output', 'w');
+                fputcsv($output, array_map($exports->safeCsvCell(...), $payload['headers']), "\t", '"', '\\');
+                foreach ($payload['rows'] as $row) {
+                    fputcsv($output, array_map($exports->safeCsvCell(...), $row), "\t", '"', '\\');
+                }
+                fclose($output);
+            }, $report.'-report.txt', ['Content-Type' => 'text/plain; charset=UTF-8']);
+        }
+
+        if ($format === 'xls') {
+            $rows = [$payload['headers'], ...$payload['rows']];
+            $xmlRows = collect($rows)->map(function (array $row) use ($exports): string {
+                $cells = collect($row)->map(fn (mixed $value): string => '<Cell><Data ss:Type="String">'
+                    .htmlspecialchars($exports->safeCsvCell($value), ENT_XML1 | ENT_QUOTES, 'UTF-8')
+                    .'</Data></Cell>')->implode('');
+
+                return '<Row>'.$cells.'</Row>';
+            })->implode('');
+            $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+                .'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+                .'<Worksheet ss:Name="Report"><Table>'.$xmlRows.'</Table></Worksheet></Workbook>';
+
+            return response($xml, 200, [
+                'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="'.$report.'-report.xls"',
+            ]);
         }
 
         $dompdf = new Dompdf(['isRemoteEnabled' => false]);

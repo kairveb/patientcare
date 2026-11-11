@@ -139,10 +139,18 @@ class QueuePlatformTest extends TestCase
         $triage->triage($routineVisit, ['priority' => 'Level 3']);
 
         Event::assertDispatchedTimes(EmergencyQueueAlert::class, 3);
-        Event::assertDispatched(EmergencyQueueAlert::class, fn (EmergencyQueueAlert $event) => $event->priority === 'Level 1');
+        Event::assertDispatched(
+            EmergencyQueueAlert::class,
+            fn (EmergencyQueueAlert $event) => $event->triageLevel === 'Level 1' && $event->priority === 'Critical'
+        );
 
-        $payload = (new EmergencyQueueAlert('Critical or severe triage assessment recorded.', 'Level 1'))->broadcastWith();
-        $this->assertSame(['message', 'priority', 'occurred_at'], array_keys($payload));
+        $payload = (new EmergencyQueueAlert('Critical or severe triage assessment recorded.', 'Level 1', 'Critical'))->broadcastWith();
+        $this->assertSame(
+            ['message', 'triage_level', 'occurred_at', 'priority', 'module'],
+            array_keys($payload)
+        );
+        $this->assertSame('Critical', $payload['priority']);
+        $this->assertSame('EERTS', $payload['module']);
         $this->assertStringNotContainsString('patient', strtolower(json_encode($payload)));
         $this->assertSame('private-er-alerts', (new EmergencyQueueAlert('Alert'))->broadcastOn()[0]->name);
     }

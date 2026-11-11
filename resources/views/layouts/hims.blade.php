@@ -42,6 +42,7 @@
                 <nav class="sidebar-nav" aria-label="HIMS systems">
                     <ul class="nav-list">
                         <li><a class="nav-link{{ request()->routeIs('dashboard') ? ' active' : '' }}" href="{{ route('dashboard') }}" aria-label="Dashboard" @if(request()->routeIs('dashboard')) aria-current="page" @endif><i class="ph-fill ph-squares-four" aria-hidden="true"></i><span class="nav-label">Dashboard</span></a></li>
+                        <li><a class="nav-link{{ request()->routeIs('notifications.*') ? ' active' : '' }}" href="{{ route('notifications.index') }}" aria-label="Notifications"><i class="ph-fill ph-bell" aria-hidden="true"></i><span class="nav-label">Notifications</span></a></li>
                     </ul>
 
                     @php
@@ -254,7 +255,7 @@
             const warning = document.getElementById('idle-session-warning');
             if (!warning || @json(request()->routeIs('telehealth.join', 'telehealth.connect'))) return;
 
-            const idleMs = {{ (int) config('security.session_idle_minutes', 5) * 1000 * 60 }};
+            const idleMs = {{ (int) config('security.session_idle_minutes', 20) * 1000 * 60 }};
             const warningMs = Math.min({{ (int) config('security.session_warning_seconds', 30) * 1000 }}, idleMs);
             const heartbeatUrl = @json(route('session.heartbeat'));
             const logoutUrl = @json(route('logout'));

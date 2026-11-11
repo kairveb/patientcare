@@ -17,9 +17,9 @@ use Illuminate\Support\Str;
 class DemoProvidersAndSlotsSeeder extends Seeder
 {
     private const PROVIDERS = [
-        ['code' => 'CAR', 'department' => 'Cardiology', 'specialty' => 'Cardiology', 'name' => 'Dr. Gabriel Lim'],
-        ['code' => 'PED', 'department' => 'Pediatrics', 'specialty' => 'Pediatrics', 'name' => 'Dr. Sofia Reyes'],
-        ['code' => 'ORT', 'department' => 'Orthopedics', 'specialty' => 'Orthopedics', 'name' => 'Dr. Mateo Cruz'],
+        ['code' => 'CAR', 'department' => 'Cardiology', 'specialty' => 'Cardiology', 'name' => 'Dr. Gabriel Lim', 'bio' => 'Provides adult cardiology consultations and ongoing heart-health care.'],
+        ['code' => 'PED', 'department' => 'Pediatrics', 'specialty' => 'Pediatrics', 'name' => 'Dr. Sofia Reyes', 'bio' => 'Provides pediatric consultations and preventive health guidance for children.'],
+        ['code' => 'ORT', 'department' => 'Orthopedics', 'specialty' => 'Orthopedics', 'name' => 'Dr. Mateo Cruz', 'bio' => 'Provides orthopedic assessment and care for bone and joint conditions.'],
     ];
 
     public function run(SchedulingService $scheduling): void
@@ -68,6 +68,9 @@ class DemoProvidersAndSlotsSeeder extends Seeder
                     'accepts_virtual' => true,
                 ]
             );
+            if (blank($provider->bio)) {
+                $provider->forceFill(['bio' => $data['bio']])->save();
+            }
             $provider->specialties()->syncWithoutDetaching([$specialty->id]);
 
             foreach (range(1, 5) as $weekday) {

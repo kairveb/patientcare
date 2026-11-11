@@ -7,6 +7,7 @@ use App\Http\Controllers\ArrivalCheckInController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BillingStatementController;
 use App\Http\Controllers\CareRequestController;
+use App\Http\Controllers\ConfidentialityAcknowledgementController;
 use App\Http\Controllers\BedSetupController;
 use App\Http\Controllers\ChargeRateController;
 use App\Http\Controllers\Api\V1\ClinicalDocumentApiController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\PrivacyAcceptanceController;
 use App\Http\Controllers\PrivacyController;
 use App\Http\Controllers\PrivacyPortalController;
 use App\Http\Controllers\PatientPortalController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicQueueDisplayController;
 use App\Http\Controllers\ReportController;
@@ -39,6 +41,7 @@ use App\Http\Controllers\TriageReassessmentController;
 use App\Http\Middleware\TrackInactivity;
 use App\Http\Middleware\EnsureActiveUser;
 use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
+use App\Http\Middleware\EnsureStaffConfidentialityAcknowledgement;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -53,7 +56,11 @@ Route::get('/queue/display/data', [PublicQueueDisplayController::class, 'data'])
     ->middleware('throttle:30,1')
     ->name('queue.display.data');
 
-Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPrivacyAcceptance::class])->group(function () {
+Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPrivacyAcceptance::class, EnsureStaffConfidentialityAcknowledgement::class])->group(function () {
+    Route::get('/confidentiality-notice', [ConfidentialityAcknowledgementController::class, 'show'])->name('confidentiality.notice');
+    Route::post('/confidentiality-notice/acknowledge', [ConfidentialityAcknowledgementController::class, 'store'])->name('confidentiality.acknowledge');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     Route::get('/privacy/acceptance', [PrivacyAcceptanceController::class, 'show'])->name('privacy.acceptance');
     Route::post('/privacy/acceptance', [PrivacyAcceptanceController::class, 'store'])->name('privacy.acceptance.store');
     Route::post('/heartbeat', function () {
@@ -393,7 +400,7 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
     Route::middleware(['can:view-reports', 'role:doctor,nurse,registration,admin,super-admin'])->group(function () {
         Route::get('reports/{report}/export/{format}', ReportExportController::class)
             ->middleware(['report.password.confirm', 'throttle:10,1'])
-            ->whereIn('format', ['csv', 'pdf'])
+            ->whereIn('format', ['csv', 'pdf', 'txt', 'xls'])
             ->name('reports.export');
     });
     Route::middleware(['can:view-reports', 'role:doctor,admin,super-admin'])->group(function () {

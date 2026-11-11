@@ -32,6 +32,17 @@ class ApiAuthController extends Controller
             ->where(fn ($query) => $query->whereRaw('LOWER(email) = ?', [$identifier])
                 ->orWhereRaw('LOWER(username) = ?', [$identifier]))
             ->first();
+        if ($user && config('security.otp_enabled', true)) {
+            $otp->expireIfNeeded($user);
+            $otpLockRemaining = $otp->lockoutRemaining($user);
+            if ($otpLockRemaining > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Your verification code expired or failed too many times. Sign-in is locked for {$otpLockRemaining} more second(s).",
+                    'data' => ['lockout_seconds' => $otpLockRemaining],
+                ], 429);
+            }
+        }
         $key = 'login:'.Str::transliterate(($user ? 'user:'.$user->id : 'identifier:'.$identifier).'|'.$request->ip());
         $maximum = (int) config('security.login_max_attempts', 5);
 
@@ -70,7 +81,7 @@ class ApiAuthController extends Controller
                 'message' => 'A one-time sign-in code was sent to your registered email.',
                 'data' => [
                     'challenge_token' => $challenge,
-                    'expires_in_seconds' => (int) config('security.otp_ttl_minutes', 5) * 60,
+                    'expires_in_seconds' => (int) config('security.otp_ttl_minutes', 2) * 60,
                 ],
             ], 202);
         }
@@ -101,15 +112,24 @@ class ApiAuthController extends Controller
             if ($user) {
                 $audit->log('OTP_FAILED', 'authentication', $user->id, 'FAILURE', ['reason' => $result, 'channel' => 'api']);
             }
+            $lockRemaining = $user ? $otp->lockoutRemaining($user) : 0;
+            $message = match ($result) {
+                LoginOtpService::EXHAUSTED => 'Too many incorrect verification codes. Sign in again to request a new code.',
+                LoginOtpService::EXPIRED => 'Your code expired. Sign in again to request a new one.',
+                default => 'The verification code is invalid.',
+            };
+            if ($lockRemaining > 0) {
+                $message .= " Try again in {$lockRemaining} second(s).";
+            }
 
             return response()->json([
                 'success' => false,
-                'message' => $result === LoginOtpService::EXHAUSTED
-                    ? 'Too many incorrect verification codes. Sign in again to request a new code.'
-                    : 'The verification code is invalid or expired.',
+                'message' => $message,
+                'data' => ['lockout_seconds' => $lockRemaining],
             ], 422);
         }
 
+        $otp->markEmailAsVerified($user);
         $user->forceFill(['last_activity_at' => now()])->save();
         $audit->log('OTP_VERIFIED', 'authentication', $user->id, 'SUCCESS', ['channel' => 'api']);
         $audit->log('LOGIN_SUCCESS', 'authentication', $user->id);
@@ -137,6 +157,16 @@ class ApiAuthController extends Controller
             ], 422);
         }
 
+        $otp->expireIfNeeded($user);
+        $lockRemaining = $otp->lockoutRemaining($user);
+        if ($lockRemaining > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Your code expired or the verification limit was reached. Sign in again after {$lockRemaining} second(s).",
+                'data' => ['lockout_seconds' => $lockRemaining],
+            ], 429);
+        }
+
         if ((int) $user->login_otp_attempts >= (int) config('security.otp_max_attempts', 5)
             || (int) $user->login_otp_resends >= (int) config('security.otp_max_resends', 3)) {
             return response()->json([
@@ -160,7 +190,7 @@ class ApiAuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'A new one-time sign-in code was sent.',
-            'data' => ['expires_in_seconds' => (int) config('security.otp_ttl_minutes', 5) * 60],
+            'data' => ['expires_in_seconds' => (int) config('security.otp_ttl_minutes', 2) * 60],
         ]);
     }
 

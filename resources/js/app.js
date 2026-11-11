@@ -388,12 +388,21 @@ const initializeProviderDepartmentFilters = () => {
         const appointmentType = form.querySelector('[data-provider-appointment-type]');
         const provider = form.querySelector('[data-provider-select]');
         const emptyMessage = form.querySelector('[data-no-providers-message]');
+        const providerBio = form.querySelector('[data-provider-bio]');
 
         if (!department || !provider || !emptyMessage) {
             return;
         }
 
         const options = Array.from(provider.options).filter((option) => option.value !== '');
+        const updateProviderBio = () => {
+            if (!providerBio) return;
+            const selected = provider.selectedOptions[0];
+            providerBio.textContent = selected?.value
+                ? (selected.dataset.bio?.trim() || 'Profile description not provided.')
+                : '';
+            providerBio.hidden = !selected?.value;
+        };
         const updateProviders = () => {
             const departmentId = department.value;
             const isTelehealth = appointmentType?.selectedOptions[0]?.dataset.telehealth === '1';
@@ -418,7 +427,9 @@ const initializeProviderDepartmentFilters = () => {
 
         department.addEventListener('change', updateProviders);
         appointmentType?.addEventListener('change', updateProviders);
+        provider.addEventListener('change', updateProviderBio);
         updateProviders();
+        updateProviderBio();
     });
 };
 

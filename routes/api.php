@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AdmissionApiController;
+use App\Http\Controllers\AppointmentReassignmentController;
+use App\Http\Controllers\ConfidentialityAcknowledgementController;
 use App\Http\Controllers\Api\V1\ApiAuthController;
 use App\Http\Controllers\Api\V1\AppointmentApiController;
 use App\Http\Controllers\Api\V1\BedApiController;
@@ -37,6 +39,7 @@ use App\Http\Controllers\OpdVitalsController;
 use App\Http\Middleware\TrackInactivity;
 use App\Http\Middleware\EnsureActiveUser;
 use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
+use App\Http\Middleware\EnsureStaffConfidentialityAcknowledgement;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
@@ -73,7 +76,7 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.address-data.submunicipality-barangays');
     });
 
-    Route::middleware(['auth:sanctum', EnsureActiveUser::class, EnsureCurrentPrivacyAcceptance::class])
+    Route::middleware(['auth:sanctum', EnsureActiveUser::class, EnsureCurrentPrivacyAcceptance::class, EnsureStaffConfidentialityAcknowledgement::class])
         ->get('/dashboard', DashboardApiController::class);
 
     // Authenticated routes
@@ -83,9 +86,12 @@ Route::prefix('v1')->group(function () {
         EnsureActiveUser::class,
         TrackInactivity::class,
         EnsureCurrentPrivacyAcceptance::class,
+        EnsureStaffConfidentialityAcknowledgement::class,
         'throttle:120,1',
     ])->group(function () {
         Route::post('/auth/logout', [ApiAuthController::class, 'logout'])->name('api.v1.auth.logout');
+        Route::post('/auth/confidentiality-acknowledgment', [ConfidentialityAcknowledgementController::class, 'store'])
+            ->name('api.v1.auth.confidentiality-acknowledgment');
         Route::get('/auth/me', [ApiAuthController::class, 'me'])->name('api.v1.auth.me');
         Route::post('/privacy/acceptance', [ApiAuthController::class, 'acceptPrivacy'])
             ->middleware('throttle:10,1')
@@ -148,7 +154,7 @@ Route::prefix('v1')->group(function () {
         });
         Route::post('/appointments/{appointment}/vitals', [OpdVitalsController::class, 'store'])
             ->middleware(['can:view-appointments', 'role:nurse', 'throttle:30,1']);
-        Route::middleware(['can:create-appointments', 'role:admin,registration,super-admin,patient', 'throttle:30,1'])->group(function () {
+        Route::middleware(['role:admin,registration,nurse,super-admin,patient', 'throttle:30,1'])->group(function () {
             Route::post('/appointments', [AppointmentApiController::class, 'store']);
         });
         Route::middleware(['can:update-appointments', 'role:admin,registration,super-admin', 'throttle:30,1'])->group(function () {
@@ -256,6 +262,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/provider-schedules/{id}/generate-slots', [ProviderScheduleApiController::class, 'generateSlots']);
             Route::delete('/provider-schedules/{id}', [ProviderScheduleApiController::class, 'destroy']);
         });
+        Route::post('/provider-unavailabilities', [AppointmentReassignmentController::class, 'storeUnavailability'])
+            ->middleware(['role:doctor,nurse,registration,admin,super-admin', 'throttle:20,1']);
 
         // Emergency
         Route::middleware(['can:view-er', 'throttle:60,1'])->group(function () {

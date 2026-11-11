@@ -27,7 +27,7 @@ class EmergencyController extends Controller
 
     public function index(Request $request)
     {
-        $query = ErQueue::with(['erVisit.patient', 'provider'])
+        $query = ErQueue::with(['erVisit.patient', 'erVisit.triageAssessments', 'provider'])
             ->orderByRaw("CASE priority
                 WHEN 'Level 1' THEN 1
                 WHEN 'Level 2' THEN 2

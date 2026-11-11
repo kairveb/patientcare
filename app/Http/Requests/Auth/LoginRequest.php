@@ -4,6 +4,7 @@ namespace App\Http\Requests\Auth;
 
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\LoginOtpService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,6 +41,16 @@ class LoginRequest extends FormRequest
     public function authenticate(): void
     {
         $user = $this->findAccount();
+        if ($user && config('security.otp_enabled', true)) {
+            $otp = app(LoginOtpService::class);
+            $otp->expireIfNeeded($user);
+            $remaining = $otp->lockoutRemaining($user);
+            if ($remaining > 0) {
+                throw ValidationException::withMessages([
+                    'email' => ["Your verification code expired or failed too many times. Sign-in is locked for {$remaining} more second(s)."],
+                ]);
+            }
+        }
         $this->ensureIsNotRateLimited($user);
 
         if (! $user || ! $user->is_active || ! Hash::check($this->string('password')->value(), $user->password)) {

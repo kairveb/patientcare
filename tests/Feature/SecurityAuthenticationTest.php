@@ -126,6 +126,15 @@ class SecurityAuthenticationTest extends TestCase
             'action' => 'OTP_FAILED',
             'resource_id' => $user->id,
         ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'OTP_LOCKOUT',
+            'resource_id' => $user->id,
+        ]);
+        $this->post(route('login'), [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertSessionHasErrors('email');
+        $this->assertStringContainsString('locked', session('errors')->first('email'));
     }
 
     public function test_otp_is_single_use(): void
@@ -156,6 +165,14 @@ class SecurityAuthenticationTest extends TestCase
         $this->assertGuest();
         $this->assertNull($user->fresh()->login_otp_hash);
         $this->assertSame(3, AuditLog::where('action', 'OTP_FAILED')->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'OTP_LOCKOUT',
+            'resource_id' => $user->id,
+        ]);
+        $this->post(route('login'), [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertSessionHasErrors('email');
     }
 
     public function test_otp_resend_obeys_cooldown_and_a_per_challenge_limit(): void
@@ -199,6 +216,52 @@ class SecurityAuthenticationTest extends TestCase
         $this->assertNull($user->fresh()->login_otp_hash);
     }
 
+    public function test_api_otp_verification_marks_the_email_verified(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $challenge = $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertStatus(202)->json('data.challenge_token');
+
+        $code = Notification::sent($user, LoginOtpNotification::class)->first()->code;
+        $this->postJson('/api/v1/auth/verify-otp', [
+            'challenge_token' => $challenge,
+            'code' => $code,
+        ])->assertOk();
+
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+    }
+
+    public function test_api_otp_expiry_locks_sign_in_for_the_configured_period(): void
+    {
+        $user = User::factory()->create();
+        $challenge = $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertStatus(202)->json('data.challenge_token');
+
+        $this->travel(121)->seconds();
+        $this->postJson('/api/v1/auth/verify-otp', [
+            'challenge_token' => $challenge,
+            'code' => '000000',
+        ])->assertUnprocessable()
+            ->assertJsonPath('data.lockout_seconds', 300);
+
+        $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'password',
+        ])->assertStatus(429)
+            ->assertJsonPath('data.lockout_seconds', 300);
+    }
+
+    public function test_otp_configuration_defaults_to_two_minutes_and_five_attempts(): void
+    {
+        $this->assertSame(2, config('security.otp_ttl_minutes'));
+        $this->assertSame(5, config('security.otp_max_attempts'));
+        $this->assertSame(5, config('security.otp_lockout_minutes'));
+    }
+
     public function test_login_lockout_expires_after_the_configured_period(): void
     {
         config([
@@ -228,7 +291,7 @@ class SecurityAuthenticationTest extends TestCase
     public function test_idle_timeout_logs_out_redirects_and_audits(): void
     {
         $user = User::factory()->create([
-            'last_activity_at' => now()->subMinutes(6),
+            'last_activity_at' => now()->subMinutes(21),
         ]);
 
         $this->actingAs($user)->get('/dashboard')->assertRedirect(route('login'));
@@ -291,10 +354,11 @@ class SecurityAuthenticationTest extends TestCase
     public function test_otp_configuration_defaults_are_secure_and_configurable(): void
     {
         $this->assertTrue(config('security.otp_enabled'));
-        $this->assertSame(5, config('security.otp_ttl_minutes'));
+        $this->assertSame(2, config('security.otp_ttl_minutes'));
         $this->assertSame(5, config('security.login_max_attempts'));
         $this->assertSame(2, config('security.login_lockout_minutes'));
-        $this->assertSame(5, config('security.session_idle_minutes'));
+        $this->assertSame(20, config('security.session_idle_minutes'));
+        $this->assertSame(5, config('security.otp_lockout_minutes'));
     }
 
     private function startEmailOtpLogin(): User

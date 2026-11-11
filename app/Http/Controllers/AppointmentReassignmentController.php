@@ -10,6 +10,7 @@ use App\Models\Provider;
 use App\Models\ProviderUnavailability;
 use App\Services\AppointmentReassignmentService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -66,9 +67,17 @@ class AppointmentReassignmentController extends Controller
         return view('appointment-reassignments.unavailability', ['providers' => $query->get()]);
     }
 
-    public function storeUnavailability(StoreProviderUnavailabilityRequest $request): RedirectResponse
+    public function storeUnavailability(StoreProviderUnavailabilityRequest $request): RedirectResponse|JsonResponse
     {
-        $this->reassignments->markUnavailable($request->validated(), (int) $request->user()->id);
+        $unavailability = $this->reassignments->markUnavailable($request->validated(), (int) $request->user()->id);
+
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Provider unavailability recorded. Affected appointments have been reviewed for reassignment.',
+                'data' => $unavailability->load('provider'),
+            ], 201);
+        }
 
         $destination = $request->user()->hasAnyRole(['registration', 'admin', 'super-admin'])
             ? route('appointment-reassignments.index')

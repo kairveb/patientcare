@@ -276,6 +276,23 @@ class AppointmentReassignmentTest extends TestCase
                 'reason' => 'emergency',
             ])
             ->assertForbidden();
+
+        $this->actingAs($doctor, 'sanctum')
+            ->postJson('/api/v1/provider-unavailabilities', [
+                'provider_id' => $ownProvider->id,
+                'starts_at' => now()->addDay()->setTime(9, 0)->toDateTimeString(),
+                'ends_at' => now()->addDay()->setTime(10, 0)->toDateTimeString(),
+                'reason' => 'emergency',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.provider_id', $ownProvider->id);
+
+        $this->postJson('/api/v1/provider-unavailabilities', [
+            'provider_id' => $otherProvider->id,
+            'starts_at' => now()->addDay()->setTime(9, 0)->toDateTimeString(),
+            'ends_at' => now()->addDay()->setTime(10, 0)->toDateTimeString(),
+            'reason' => 'emergency',
+        ])->assertForbidden();
     }
 
     private function appointmentFixture(bool $telehealth = false): array

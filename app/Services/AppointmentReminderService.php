@@ -88,8 +88,11 @@ class AppointmentReminderService
             }
 
             try {
-                Notification::route('mail', $appointment->patient->email)
-                    ->notify(new AppointmentReminderNotification($appointment, $hoursBefore));
+                $notification = new AppointmentReminderNotification($appointment, $hoursBefore);
+                Notification::route('mail', $appointment->patient->email)->notify($notification);
+                if ($appointment->patient->user) {
+                    Notification::sendNow($appointment->patient->user, $notification, ['database']);
+                }
             } catch (Throwable $exception) {
                 app(MailFailureLogger::class)->recordFailure(
                     'appointment_reminder',

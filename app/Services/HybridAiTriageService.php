@@ -132,6 +132,9 @@ class HybridAiTriageService
             $aiResult = [
                 'scope' => 'in_scope',
                 'urgency_level' => $selectedUrgency,
+                'severity_category' => in_array($selectedUrgency, ['emergency', 'urgent'], true)
+                    ? 'Severe (critical)'
+                    : 'Not Severe',
                 'recommended_specialty' => $resolved['specialty'],
                 'summary' => 'The rule-based symptom check suggests '.$resolved['department'].' for clinical review.',
                 'red_flags' => $allRedFlags,
@@ -241,6 +244,7 @@ class HybridAiTriageService
             'fallback_reason' => null,
             'rule_overrode_ai' => false,
             'urgency_level' => 'self_care',
+            'severity_category' => 'Not Severe',
             'urgency_score' => AiTriageService::LEVEL_ROUTINE,
             'requires_er' => false,
             'recommended_department' => 'General Medicine',

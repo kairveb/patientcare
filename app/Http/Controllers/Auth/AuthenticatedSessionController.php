@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\LoginOtpService;
 use App\Services\MfaService;
-use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -75,19 +74,42 @@ class AuthenticatedSessionController extends Controller
             ? User::query()->find($challenge['id'])
             : null;
 
+        $isEmailChallenge = ($challenge['method'] ?? null) === 'email';
+        $emailLockSeconds = $account && $isEmailChallenge
+            ? app(LoginOtpService::class)->expireIfNeeded($account)
+            : 0;
+        $challengeTtl = $isEmailChallenge
+            ? (int) config('security.otp_ttl_minutes', 2) * 60
+            : 5 * 60;
+
         if (! $account || ! isset($challenge['started_at'])
-            || now()->timestamp - (int) $challenge['started_at'] > ((int) config('security.otp_ttl_minutes', 5) * 60)) {
-            if ($account && ($challenge['method'] ?? null) === 'email') {
-                app(LoginOtpService::class)->clear($account);
-            }
+            || ($isEmailChallenge && (
+                $emailLockSeconds > 0
+                || ! $account->login_otp_expires_at
+                || $account->login_otp_expires_at->isPast()
+            ))
+            || now()->timestamp - (int) $challenge['started_at'] > $challengeTtl) {
+            $lockRemaining = $account && $isEmailChallenge
+                ? app(LoginOtpService::class)->lockoutRemaining($account)
+                : 0;
             $request->session()->forget('login_challenge');
 
-            return redirect()->route('login')->withErrors(['email' => 'Your verification session expired. Please sign in again.']);
+            $message = $isEmailChallenge
+                ? 'Your code expired. Sign in again to request a new one.'
+                : 'Your verification session expired. Please sign in again.';
+            if ($lockRemaining > 0) {
+                $message .= " Try again in {$lockRemaining} second(s).";
+            }
+
+            return redirect()->route('login')->withErrors(['email' => $message]);
         }
 
         return view('auth.mfa-challenge', [
             'challengeMethod' => $challenge['method'] ?? 'email',
             'maskedEmail' => $this->maskedEmail($account->email),
+            'expiresAt' => $isEmailChallenge
+                ? $account->login_otp_expires_at->timestamp
+                : (int) $challenge['started_at'] + $challengeTtl,
         ]);
     }
 
@@ -104,10 +126,13 @@ class AuthenticatedSessionController extends Controller
         $account = is_array($challenge) && isset($challenge['id'])
             ? User::query()->find($challenge['id'])
             : null;
-        $maxAge = (int) config('security.otp_ttl_minutes', 5) * 60;
         $totpExpired = ($challenge['method'] ?? null) === 'totp'
             && isset($challenge['started_at'])
-            && now()->timestamp - (int) $challenge['started_at'] > $maxAge;
+            && now()->timestamp - (int) $challenge['started_at'] > 5 * 60;
+
+        if ($account && ($challenge['method'] ?? null) === 'email') {
+            $otp->expireIfNeeded($account);
+        }
 
         if (! $account || ! $account->is_active || ! isset($challenge['started_at']) || $totpExpired) {
             $request->session()->forget('login_challenge');
@@ -132,7 +157,9 @@ class AuthenticatedSessionController extends Controller
                 if ($attempts >= (int) config('security.otp_max_attempts', 5)) {
                     $request->session()->forget('login_challenge');
 
-                    return redirect()->route('login')->withErrors(['email' => 'Too many incorrect verification codes. Please sign in again.']);
+                    return redirect()->route('login')->withErrors([
+                        'email' => 'Too many incorrect authenticator codes. Please sign in again.',
+                    ]);
                 }
 
                 return back()->withErrors(['code' => 'The code you entered is invalid.']);
@@ -147,11 +174,16 @@ class AuthenticatedSessionController extends Controller
                 ]);
                 if (in_array($result, [LoginOtpService::EXPIRED, LoginOtpService::EXHAUSTED], true)) {
                     $request->session()->forget('login_challenge');
+                    $lockRemaining = $otp->lockoutRemaining($account);
+                    $message = $result === LoginOtpService::EXPIRED
+                        ? 'Your code expired. Sign in again to request a new one.'
+                        : 'Too many incorrect verification codes. Sign in again to request a new one.';
+                    if ($lockRemaining > 0) {
+                        $message .= " Try again in {$lockRemaining} second(s).";
+                    }
 
                     return redirect()->route('login')->withErrors([
-                        'email' => $result === LoginOtpService::EXPIRED
-                            ? 'Your one-time code expired. Please sign in again.'
-                            : 'Too many incorrect verification codes. Please sign in again.',
+                        'email' => $message,
                     ]);
                 }
 
@@ -159,9 +191,7 @@ class AuthenticatedSessionController extends Controller
             }
 
             app(AuditLogService::class)->log('OTP_VERIFIED', 'authentication', $account->id);
-            if (! $account->hasVerifiedEmail() && $account->markEmailAsVerified()) {
-                event(new Verified($account));
-            }
+            $otp->markEmailAsVerified($account);
         }
 
         $this->completeLogin($request, $account);
@@ -178,6 +208,15 @@ class AuthenticatedSessionController extends Controller
 
         if (! $account || ! $account->is_active || ! config('security.otp_enabled', true)) {
             return redirect()->route('login')->withErrors(['email' => 'Your verification session is no longer active. Please sign in again.']);
+        }
+
+        $expiredLock = $otp->expireIfNeeded($account);
+        if ($expiredLock > 0) {
+            $request->session()->forget('login_challenge');
+
+            return redirect()->route('login')->withErrors([
+                'email' => "Your code expired. Sign in again to request a new one after {$expiredLock} second(s).",
+            ]);
         }
 
         $sentAt = $account->login_otp_sent_at;

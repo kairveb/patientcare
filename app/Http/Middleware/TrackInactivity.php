@@ -27,7 +27,7 @@ class TrackInactivity
         }
 
         $lastSeen = $user->last_activity_at;
-        $timeoutSeconds = (int) config('security.session_idle_minutes', 5) * 60;
+        $timeoutSeconds = (int) config('security.session_idle_minutes', 20) * 60;
         $threshold = now()->subSeconds($timeoutSeconds);
 
         $isTelehealthJoin = $request->routeIs('telehealth.join', 'telehealth.connect', 'telehealth.leave');
@@ -40,6 +40,11 @@ class TrackInactivity
             }
 
             if ($request->expectsJson() || $request->is('api/*')) {
+                $token = $user->currentAccessToken();
+                if ($token && method_exists($token, 'delete')) {
+                    $token->delete();
+                }
+
                 return response()->json([
                     'message' => 'You have been logged out due to inactivity.',
                 ], 401);

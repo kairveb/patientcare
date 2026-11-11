@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Appointment;
+use App\Support\NotificationMetadata;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -38,6 +39,20 @@ class AppointmentReminderNotification extends Notification implements ShouldQueu
             ->line('Provider: '.$appointment->provider->display_name.'.')
             ->line('Appointment number: '.$appointment->appointment_number.'.')
             ->line('Please contact the hospital if you need to make a change.');
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        $appointment = $this->appointment->loadMissing(['patient', 'provider', 'appointmentType']);
+        $leadTime = $this->hoursBefore === 24 ? '24-hour' : '1-hour';
+
+        return [
+            'title' => ucfirst($leadTime).' appointment reminder',
+            'message' => 'Your '.$appointment->appointmentType?->name.' appointment with '.$appointment->provider?->display_name
+                .' is scheduled for '.$appointment->starts_at->format('M j, Y g:i A').'.',
+            'appointment_id' => $appointment->id,
+            'url' => route('appointments.show', $appointment),
+        ] + NotificationMetadata::make($this->hoursBefore === 1 ? 'High' : 'Normal', 'ASS');
     }
 
     public function failed(Throwable $exception): void

@@ -33,7 +33,7 @@
 
                 @if (request()->boolean('timeout'))
                     <div role="status" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                        You were signed out after {{ config('security.session_idle_minutes', 5) }} minutes of inactivity. Please sign in again.
+                        You were signed out after {{ config('security.session_idle_minutes', 20) }} minutes of inactivity. Please sign in again.
                     </div>
                 @endif
                 @if (session('status'))

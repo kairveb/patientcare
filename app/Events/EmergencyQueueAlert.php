@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Support\NotificationMetadata;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -14,7 +15,8 @@ class EmergencyQueueAlert implements ShouldBroadcast
 
     public function __construct(
         public readonly string $message,
-        public readonly ?string $priority = null,
+        public readonly ?string $triageLevel = null,
+        public readonly string $priority = 'High',
     ) {
     }
 
@@ -32,8 +34,8 @@ class EmergencyQueueAlert implements ShouldBroadcast
     {
         return [
             'message' => $this->message,
-            'priority' => $this->priority,
+            'triage_level' => $this->triageLevel,
             'occurred_at' => now()->toIso8601String(),
-        ];
+        ] + NotificationMetadata::make($this->priority, 'EERTS');
     }
 }

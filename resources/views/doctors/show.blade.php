@@ -35,6 +35,7 @@
                     };
                 @endphp
                 <span class="status-pill {{ $pill }}">{{ $priorityLabel }}</span>
+                <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $assessment->severity_category === 'Severe (critical)' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800' }}">{{ $assessment->severity_category }}</span>
                 <a href="{{ route('doctors.queue') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Back to queue</a>
             </div>
         </div>

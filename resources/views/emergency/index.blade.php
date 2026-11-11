@@ -168,7 +168,10 @@
                             </td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $q->erVisit->arrived_at?->format('g:i A') ?? '—' }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $q->queued_at->diffInMinutes(now()) }} min</td>
-                            <td class="px-5 py-4"><span class="status-pill {{ $erPriorityVariant }}">{{ $q->priority }}</span></td>
+                            <td class="px-5 py-4">
+                                <span class="status-pill {{ $erPriorityVariant }}">{{ $q->priority }}</span>
+                                <div class="mt-1 text-xs font-semibold">{{ $q->erVisit->triageAssessments->last()?->severity_category ?? 'Not Severe' }}</div>
+                            </td>
                             <td class="px-5 py-4">
                                 <div class="max-w-md text-sm text-slate-700">{{ $q->erVisit->chief_complaint ?? 'No complaint recorded' }}</div>
                             </td>
@@ -320,6 +323,7 @@
                         <div><span class="text-slate-500">Status:</span> <span class="px-2 py-1 text-xs rounded-full bg-slate-100 ml-1">{{ $visit->status }}</span></div>
                         @if ($visit->queue)
                             <div><span class="text-slate-500">Priority:</span> <span class="font-medium">{{ $visit->queue->priority }}</span></div>
+                            <div><span class="text-slate-500">Severity category:</span> <span class="font-semibold">{{ $visit->triageAssessments->last()?->severity_category ?? 'Not Severe' }}</span></div>
                             <div><span class="text-slate-500">Queue status:</span> <span class="font-medium">{{ $visit->queue->status }}</span></div>
                         @endif
                     </div>

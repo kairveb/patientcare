@@ -171,7 +171,29 @@ class PatientAppointmentJourneyTest extends TestCase
             'status' => Waitlist::STATUS_OFFERED,
         ]);
         Notification::assertSentTo($patientUser, AppointmentJourneyNotification::class);
+        $notice = Notification::sent($patientUser, AppointmentJourneyNotification::class)->first();
+        $this->assertSame(route('doctors.show', $provider), $notice->toDatabase($patientUser)['url']);
+        $this->assertStringNotContainsString('contact registration', $notice->toDatabase($patientUser)['message']);
         Notification::assertSentTo($patientUser, AppointmentJourneyNotification::class);
+    }
+
+    public function test_nurse_can_create_walk_in_appointment_through_the_api(): void
+    {
+        config(['appointments.requires_approval' => true]);
+        $nurse = $this->userWithPermission('nurse', 'view-appointments');
+        $patient = Patient::factory()->create();
+        $provider = Provider::factory()->create();
+        $slot = $this->slot($provider, now()->addDays(3)->setTime(10, 0));
+
+        $this->actingAs($nurse, 'sanctum')->postJson('/api/v1/appointments', [
+            'patient_id' => $patient->id,
+            'provider_id' => $provider->id,
+            'starts_at' => $slot->starts_at->toDateTimeString(),
+            'appointment_slot_id' => $slot->id,
+            'booking_source' => 'walk_in',
+        ])->assertCreated()
+            ->assertJsonPath('data.booking_source', 'walk_in')
+            ->assertJsonPath('data.status', Appointment::STATUS_CONFIRMED);
     }
 
     public function test_patient_booking_requires_approval_and_registration_can_confirm_or_reject(): void

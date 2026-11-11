@@ -62,6 +62,44 @@ class AiReportingFeaturesTest extends TestCase
         $this->assertStringNotContainsString('HYPERLINK', json_encode($log->metadata, JSON_THROW_ON_ERROR));
     }
 
+    public function test_txt_and_xls_exports_apply_formula_neutralization_and_keep_authorization(): void
+    {
+        $staff = $this->userWithRole('registration');
+        $this->grantReports($staff);
+        $provider = Provider::factory()->create(['display_name' => '=HYPERLINK("https://bad.test")']);
+        Appointment::factory()->create([
+            'provider_id' => $provider->id,
+            'starts_at' => now(),
+            'ends_at' => now()->addMinutes(30),
+            'status' => Appointment::STATUS_CONFIRMED,
+        ]);
+        $session = ['auth.password_confirmed_at' => time()];
+
+        $txt = $this->withSession($session)->actingAs($staff)
+            ->get(route('reports.export', ['report' => 'appointments', 'format' => 'txt']))
+            ->assertOk()
+            ->assertHeader('content-type', 'text/plain; charset=UTF-8')
+            ->streamedContent();
+        $this->assertStringContainsString("'=HYPERLINK", $txt);
+        $this->assertStringContainsString("\t", $txt);
+
+        $xls = $this->withSession($session)->actingAs($staff)
+            ->get(route('reports.export', ['report' => 'appointments', 'format' => 'xls']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->assertHeader('content-disposition', 'attachment; filename="appointments-report.xls"')
+            ->getContent();
+        $this->assertStringContainsString('urn:schemas-microsoft-com:office:spreadsheet', $xls);
+        $this->assertStringContainsString(
+            "'=HYPERLINK",
+            html_entity_decode($xls, ENT_QUOTES | ENT_XML1)
+        );
+
+        $this->withSession($session)->actingAs($staff)
+            ->get(route('reports.export', ['report' => 'appointments', 'format' => 'xlsx']))
+            ->assertNotFound();
+    }
+
     public function test_report_export_requires_recent_password_confirmation_and_limits_failed_attempts(): void
     {
         $admin = $this->userWithRole('registration', ['password' => 'ValidPass#123']);

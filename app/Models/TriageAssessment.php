@@ -10,6 +10,8 @@ class TriageAssessment extends Model
 {
     protected $guarded = [];
 
+    protected $appends = ['severity_category'];
+
     protected $casts = [
         'triaged_at' => 'datetime',
         'symptoms' => 'array',
@@ -81,5 +83,17 @@ class TriageAssessment extends Model
             3 => self::COLOR_ORANGE,
             default => self::COLOR_GREEN,
         };
+    }
+
+    public function getSeverityCategoryAttribute(): string
+    {
+        return self::severityCategoryFor($this->final_level ?: $this->priority_label);
+    }
+
+    public static function severityCategoryFor(?string $level): string
+    {
+        return in_array($level, ['Emergency', 'Urgent', self::PRIORITY_LEVEL1, self::PRIORITY_LEVEL2], true)
+            ? 'Severe (critical)'
+            : 'Not Severe';
     }
 }

@@ -119,12 +119,13 @@ class ReportExportService
         $this->applyPatientRelatedFilters($query, $filters);
 
         return $this->result(
-            ['Arrived at', 'Patient reference', 'Visit status', 'Triage priority'],
+            ['Arrived at', 'Patient reference', 'Visit status', 'Triage priority', 'Severity category'],
             $query->orderBy('arrived_at')->get()->map(fn (ErVisit $visit): array => [
                 $visit->arrived_at?->toIso8601String(),
                 $this->patientReference($visit->patient),
                 $visit->status,
                 $visit->triageAssessments->last()?->priority,
+                $visit->triageAssessments->last()?->severity_category,
             ])
         );
     }
@@ -185,12 +186,14 @@ class ReportExportService
         $assessments = $query->orderBy('triaged_at')->get();
 
         return $this->result(
-            ['Triaged at', 'Patient reference', 'AI urgency', 'Final urgency', 'Rule override'],
+            ['Triaged at', 'Patient reference', 'AI urgency', 'AI severity category', 'Final urgency', 'Final severity category', 'Rule override'],
             $assessments->map(fn (TriageAssessment $assessment): array => [
                 $assessment->triaged_at?->toIso8601String(),
                 $this->patientReference($assessment->erVisit?->patient),
                 $assessment->ai_suggested_level,
+                TriageAssessment::severityCategoryFor($assessment->ai_suggested_level),
                 $assessment->final_level,
+                $assessment->severity_category,
                 $assessment->is_overridden ? 'true' : 'false',
             ])
         );
@@ -213,12 +216,15 @@ class ReportExportService
         }
 
         return $this->result(
-            ['Triage date', 'Patient reference', 'Provider', 'Recommended urgency', 'Specialty', 'Rule override'],
+            ['Triage date', 'Patient reference', 'Provider', 'Recommended urgency', 'Severity category', 'Specialty', 'Rule override'],
             $query->orderBy('created_at')->get()->map(fn (SymptomCheck $check): array => [
                 $check->created_at?->toIso8601String(),
                 $this->patientReference($check->patient),
                 $check->ai_provider,
                 $check->urgency_level,
+                in_array(strtolower((string) $check->urgency_level), ['emergency', 'urgent'], true)
+                    ? 'Severe (critical)'
+                    : 'Not Severe',
                 $check->recommended_department,
                 $check->rule_overrode_ai ? 'true' : 'false',
             ])
