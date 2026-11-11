@@ -29,6 +29,13 @@
         </div>
     </div>
 
+    @php
+        $activeBedAssignment = $admission->bedAssignments->firstWhere('status', \App\Models\BedAssignment::STATUS_ACTIVE);
+    @endphp
+    @if (in_array($admission->status, ['ADMITTED', 'TRANSFERRED'], true) && ! $activeBedAssignment)
+        <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No bed assigned to this admission.</p>
+    @endif
+
     @role('nurse', 'super-admin')
     @can('execute-discharges')
         {{-- Discharge form --}}
@@ -72,9 +79,9 @@
     @role('registration', 'super-admin')
     @can('assign-beds')
         {{-- Bed assignment / reservation --}}
-        @if ($admission->status === 'APPROVED')
+        @if ($admission->status === 'APPROVED' || (in_array($admission->status, ['ADMITTED', 'TRANSFERRED'], true) && ! $activeBedAssignment))
         <div class="bg-white rounded-xl border border-slate-200 p-6">
-            <h3 class="font-semibold text-slate-800 mb-3">Assign Bed</h3>
+            <h3 class="font-semibold text-slate-800 mb-3">{{ $admission->status === 'APPROVED' ? 'Assign Bed' : 'Assign Missing Bed' }}</h3>
             <form method="GET" action="{{ route('admissions.show', $admission) }}" class="hims-filter-bar mb-4">
                 <div>
                     <label for="assignment-ward" class="mb-1 block text-sm font-medium text-slate-700">Filter beds by ward</label>
@@ -100,7 +107,7 @@
                     </select>
                     @error('bed_id')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
-                <button type="submit" class="px-6 py-2.5 text-sm bg-teal-600 text-white rounded-lg">Admit &amp; Assign Bed</button>
+                <button type="submit" class="px-6 py-2.5 text-sm bg-teal-600 text-white rounded-lg">{{ $admission->status === 'APPROVED' ? 'Admit &amp; Assign Bed' : 'Assign Bed' }}</button>
             </form>
         </div>
         @endif

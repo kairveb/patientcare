@@ -155,6 +155,9 @@ body.sidebar-collapsed .sidebar { width:var(--sidebar-collapsed-width); } body.s
 .nav-list,.nav-submenu { padding: 0; margin: 0; list-style: none; }
 .nav-accordion { position: relative; }
 .nav-accordion__toggle { position: relative; }
+.nav-module-toggle { align-items: flex-start; }
+.nav-module-toggle .nav-label { min-width: 0; flex: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.nav-module-toggle .nav-chevron { flex: 0 0 16px; margin-top: 3px; }
 .nav-accordion__toggle .nav-chevron { width: 16px; margin-left: auto; color: var(--sidebar-section-text); font-size: 14px; }
 .nav-accordion__toggle:hover .nav-chevron { color: var(--color-primary); transform: none; }
 .nav-accordion.is-expanded > .nav-accordion__toggle { background: var(--sidebar-hover); color: var(--color-primary-dark); }

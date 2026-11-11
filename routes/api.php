@@ -56,7 +56,7 @@ Route::prefix('v1')->group(function () {
             ->middleware('throttle:3,1');
     });
 
-    Route::prefix('/address-data/philippines')->middleware('throttle:60,1')->group(function () {
+    Route::prefix('/address-data/philippines')->middleware('throttle:600,1')->group(function () {
         Route::get('/regions', [PhilippineAddressDataController::class, 'regions'])
             ->name('api.v1.address-data.regions');
         Route::get('/regions/{region}/provinces', [PhilippineAddressDataController::class, 'provinces'])

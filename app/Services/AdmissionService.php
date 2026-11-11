@@ -194,16 +194,26 @@ class AdmissionService
                 throw ValidationException::withMessages(['admission_id' => ['Admission not found.']]);
             }
 
-            if ($lockedAdmission->status !== Admission::STATUS_APPROVED) {
+            $isApproved = $lockedAdmission->status === Admission::STATUS_APPROVED;
+            $canAssignMissingBed = in_array($lockedAdmission->status, [
+                Admission::STATUS_ADMITTED,
+                Admission::STATUS_TRANSFERRED,
+            ], true) && ! $lockedAdmission->bedAssignments()
+                ->where('status', \App\Models\BedAssignment::STATUS_ACTIVE)
+                ->exists();
+
+            if (! $isApproved && ! $canAssignMissingBed) {
                 throw ValidationException::withMessages([
-                    'status' => ['Only an approved admission can be admitted and assigned a bed.'],
+                    'status' => ['Only an approved admission or an admitted patient without an active bed assignment can be assigned a bed.'],
                 ]);
             }
 
-            $lockedAdmission->update([
-                'status' => Admission::STATUS_ADMITTED,
-                'admitted_at' => now(),
-            ]);
+            if ($isApproved) {
+                $lockedAdmission->update([
+                    'status' => Admission::STATUS_ADMITTED,
+                    'admitted_at' => now(),
+                ]);
+            }
             $this->bedManagement->assignBed($lockedAdmission, $bedId, $reservationId);
 
             return $lockedAdmission->fresh();

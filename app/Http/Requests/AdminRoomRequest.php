@@ -10,7 +10,7 @@ class AdminRoomRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('super-admin') === true
+        return $this->user()?->hasRole('admin', 'super-admin') === true
             && $this->user()->hasPermission('manage-wards');
     }
 

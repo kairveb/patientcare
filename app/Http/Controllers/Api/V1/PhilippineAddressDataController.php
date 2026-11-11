@@ -48,7 +48,7 @@ class PhilippineAddressDataController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $loadRows(),
-            ]);
+            ])->header('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
         } catch (RuntimeException $exception) {
             Log::error('Failed to load Philippine address dataset.', [
                 'exception' => $exception,

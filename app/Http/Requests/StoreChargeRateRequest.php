@@ -24,11 +24,7 @@ class StoreChargeRateRequest extends FormRequest
 
         return [
             'charge_code' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9:_-]+$/', $uniqueCode],
-            'category' => ['required', Rule::in([
-                ChargeRate::CATEGORY_ENCOUNTER,
-                ChargeRate::CATEGORY_PRESCRIPTION,
-                ChargeRate::CATEGORY_BED_DAILY,
-            ])],
+            'category' => ['required', Rule::in(ChargeRate::CATEGORIES)],
             'description' => ['required', 'string', 'max:255'],
             'unit_amount' => ['required', 'numeric', 'min:0.01', 'max:9999999999.99', 'decimal:0,2'],
             'currency' => ['required', 'in:PHP'],

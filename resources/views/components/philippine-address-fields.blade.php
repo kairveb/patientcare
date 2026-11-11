@@ -83,6 +83,7 @@
             (() => {
                 const fetchRows = async (endpoint, path) => {
                     const response = await fetch(`${endpoint}/${path}`, {
+                        cache: 'force-cache',
                         headers: { Accept: 'application/json' },
                         credentials: 'same-origin',
                     });

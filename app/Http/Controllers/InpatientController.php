@@ -183,11 +183,12 @@ class InpatientController extends Controller
             'bed_id' => ['required', 'exists:beds,id'],
             'reservation_id' => ['nullable', 'exists:bed_reservations,id'],
         ]);
+        $wasAlreadyAdmitted = in_array($admission->status, [Admission::STATUS_ADMITTED, Admission::STATUS_TRANSFERRED], true);
 
         try {
             $this->admissions->admit($admission, $data['bed_id'], $data['reservation_id'] ?? null);
 
-            return back()->with('success', 'Patient admitted and bed assigned.');
+            return back()->with('success', $wasAlreadyAdmitted ? 'Bed assigned to the existing admission.' : 'Patient admitted and bed assigned.');
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
         }

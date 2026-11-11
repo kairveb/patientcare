@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Admission;
+use App\Models\Bed;
+use App\Models\BedAssignment;
 use App\Models\ChargeRate;
 use App\Models\Encounter;
 use App\Models\EncounterBill;
@@ -10,7 +12,9 @@ use App\Models\ErQueue;
 use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\Prescription;
+use App\Models\Room;
 use App\Models\User;
+use App\Models\Ward;
 use App\Services\AdmissionService;
 use App\Services\BillingAggregationService;
 use App\Services\DischargeSummaryService;
@@ -75,6 +79,56 @@ class BillingAndDischargeWorkflowTest extends TestCase
             'quantity' => 3,
             'line_total' => '37.50',
         ]);
+    }
+
+    public function test_billing_uses_specialty_consultation_and_assigned_ward_rates_when_available(): void
+    {
+        $doctor = User::where('email', 'doctor@coor.test')->firstOrFail();
+        $patient = Patient::query()->firstOrFail();
+        $specialty = $doctor->provider->specialties()->where('name', 'Cardiology')->firstOrFail();
+        $doctor->provider->specialties()->sync([$specialty->id]);
+        $encounter = $this->createEncounter($patient, $doctor);
+        $this->createRate('consultation:cardiology', 'CONSULTATION', 1200);
+        $this->createRate('encounter:OUTPATIENT', 'ENCOUNTER', 250);
+
+        $encounterPreview = app(BillingAggregationService::class)->previewForEncounter($encounter);
+        $this->assertSame('consultation:cardiology', $encounterPreview['items'][0]['rate_snapshot']['charge_code']);
+
+        $admission = Admission::create([
+            'admission_number' => 'ADM-RATE-'.uniqid(),
+            'patient_id' => $patient->id,
+            'attending_provider_id' => $doctor->provider->id,
+            'status' => Admission::STATUS_ADMITTED,
+            'admitted_at' => now()->subDay(),
+        ]);
+        $ward = Ward::create([
+            'code' => 'WARD-RATE-'.uniqid(),
+            'name' => 'Critical Care Rate Ward',
+            'type' => 'Critical Care',
+            'active' => true,
+        ]);
+        $room = Room::create([
+            'ward_id' => $ward->id,
+            'number' => 'ROOM-RATE-'.uniqid(),
+            'type' => 'Critical Care',
+        ]);
+        $bed = Bed::create([
+            'room_id' => $room->id,
+            'number' => 'BED-RATE-'.uniqid(),
+            'status' => Bed::STATUS_OCCUPIED,
+        ]);
+        BedAssignment::create([
+            'admission_id' => $admission->id,
+            'bed_id' => $bed->id,
+            'assigned_at' => now()->subDay(),
+            'status' => BedAssignment::STATUS_ACTIVE,
+        ]);
+        $this->createRate('bed:critical-care', 'BED_DAILY', 8500);
+        $this->createRate('bed:default', 'BED_DAILY', 1200);
+
+        $admissionPreview = app(BillingAggregationService::class)->previewForAdmission($admission);
+        $bedStay = collect($admissionPreview['items'])->firstWhere('source_type', 'BED_STAY');
+        $this->assertSame('bed:critical-care', $bedStay['rate_snapshot']['charge_code']);
     }
 
     public function test_cashier_api_is_role_gated_and_payment_must_match_exact_statement_total(): void

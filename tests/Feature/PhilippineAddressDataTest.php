@@ -28,6 +28,15 @@ class PhilippineAddressDataTest extends TestCase
         }
     }
 
+    public function test_address_data_responses_are_cacheable_with_the_existing_json_shape(): void
+    {
+        $response = $this->getJson('/api/v1/address-data/philippines/regions')
+            ->assertOk()
+            ->assertJsonStructure(['success', 'data' => [['psgc_code', 'name']]]);
+        $this->assertStringContainsString('max-age=86400', $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('stale-while-revalidate=604800', $response->headers->get('Cache-Control'));
+    }
+
     public function test_ncr_loads_manila_district_barangays_and_quezon_city_barangays(): void
     {
         $regionCode = '1300000000';

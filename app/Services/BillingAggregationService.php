@@ -284,7 +284,7 @@ class BillingAggregationService
     {
         $items = [];
         foreach ($encounters as $encounter) {
-            $rate = $this->requiredRate('encounter:'.$encounter->type, 'Encounter fee for '.$encounter->type);
+            $rate = $this->encounterRate($encounter);
             $items[] = $this->line(
                 $rate,
                 'ENCOUNTER',
@@ -311,7 +311,8 @@ class BillingAggregationService
             ->get();
 
         foreach ($prescriptions as $prescription) {
-            $rate = $this->requiredRate('prescription:'.Str::slug($prescription->medication_name), 'Prescription unit price for '.$prescription->medication_name);
+            $rate = $this->activeRate('prescription:'.Str::slug($prescription->medication_name))
+                ?? $this->requiredRate('prescription:default', 'Default prescription unit price for '.$prescription->medication_name);
             $linkedEncounter = $encounters->firstWhere('id', $prescription->encounter_id)
                 ?? $encounters->firstWhere('appointment_id', $prescription->telehealthSession?->appointment_id);
             $items[] = $this->line(
@@ -334,7 +335,7 @@ class BillingAggregationService
                 ]);
             }
 
-            $rate = $this->requiredRate('bed:default', 'Daily bed rate');
+            $rate = $this->bedRate($admission);
             $now = now();
             $elapsedSeconds = max(0, $admission->admitted_at->diffInSeconds($now, false));
             $days = max(1, (int) ceil($elapsedSeconds / 86400));
@@ -399,12 +400,22 @@ class BillingAggregationService
 
     private function requiredRate(string $code, string $label): ChargeRate
     {
-        $rate = ChargeRate::query()->where('charge_code', $code)->where('active', true)->first();
+        $rate = $this->activeRate($code);
 
         if (! $rate) {
             throw ValidationException::withMessages([
                 'billing' => ["Missing active charge rate [{$code}]: {$label}. Configure it before generating a statement."],
             ]);
+        }
+
+        return $rate;
+    }
+
+    private function activeRate(string $code): ?ChargeRate
+    {
+        $rate = ChargeRate::query()->where('charge_code', $code)->where('active', true)->first();
+        if (! $rate) {
+            return null;
         }
 
         if ($rate->currency !== 'PHP' || $this->moneyToCents((string) $rate->unit_amount) < 1) {
@@ -414,6 +425,47 @@ class BillingAggregationService
         }
 
         return $rate;
+    }
+
+    private function encounterRate(Encounter $encounter): ChargeRate
+    {
+        $encounter->loadMissing('provider.specialties');
+        $specialty = $encounter->provider?->specialties?->sortBy('name')->first();
+        $specialtyCode = $specialty ? 'consultation:'.Str::slug($specialty->name) : null;
+
+        if ($specialtyCode) {
+            $rate = $this->activeRate($specialtyCode);
+            if ($rate) {
+                return $rate;
+            }
+        }
+
+        return $this->requiredRate('encounter:'.$encounter->type, 'Encounter fee for '.$encounter->type);
+    }
+
+    private function bedRate(Admission $admission): ChargeRate
+    {
+        $wardType = $admission->bedAssignments()
+            ->where('status', \App\Models\BedAssignment::STATUS_ACTIVE)
+            ->with('bed.room.ward')
+            ->first()?->bed?->room?->ward?->type;
+        $type = Str::lower(trim((string) $wardType));
+        $bedCode = match ($type) {
+            'general medicine', 'general' => 'bed:general-medicine',
+            'pediatrics', 'pediatric' => 'bed:pediatrics',
+            'critical care', 'icu' => 'bed:critical-care',
+            'private', 'private rooms' => 'bed:private',
+            default => null,
+        };
+
+        if ($bedCode) {
+            $rate = $this->activeRate($bedCode);
+            if ($rate) {
+                return $rate;
+            }
+        }
+
+        return $this->requiredRate('bed:default', 'Daily bed rate');
     }
 
     private function moneyToCents(string $amount): int

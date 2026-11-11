@@ -16,8 +16,10 @@ class SecureApiHeaders
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        $response->headers->set('Pragma', 'no-cache');
+        if (! $request->is('api/v1/address-data/philippines/*')) {
+            $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->headers->set('Pragma', 'no-cache');
+        }
         $response->headers->set('X-Request-Id', $request->header('X-Request-Id') ?? bin2hex(random_bytes(8)));
 
         if ($request->isSecure()) {

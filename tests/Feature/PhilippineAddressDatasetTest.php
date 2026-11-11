@@ -55,13 +55,13 @@ class PhilippineAddressDatasetTest extends TestCase
         $this->assertSame('0405600000', $provinceCities[0]['parent_psgc_code']);
     }
 
-    public function test_public_address_endpoint_is_throttled(): void
+    public function test_public_address_endpoints_use_a_shared_production_safe_throttle(): void
     {
-        for ($attempt = 0; $attempt < 60; $attempt++) {
-            $this->getJson('/api/v1/address-data/philippines/regions')->assertOk();
-        }
+        $route = app('router')->getRoutes()->getByName('api.v1.address-data.regions');
 
-        $this->getJson('/api/v1/address-data/philippines/regions')->assertTooManyRequests();
+        $this->assertNotNull($route);
+        $this->assertContains('throttle:600,1', $route->middleware());
+        $this->getJson('/api/v1/address-data/philippines/regions')->assertOk();
     }
 
     public function test_address_data_failure_is_logged_and_returns_a_clear_service_error(): void

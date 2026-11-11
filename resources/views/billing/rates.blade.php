@@ -18,7 +18,7 @@
             </label>
             <label class="text-sm">Category
                 <select name="category" required class="mt-1 w-full rounded border-slate-300">
-                    @foreach (['ENCOUNTER', 'PRESCRIPTION', 'BED_DAILY'] as $category)<option value="{{ $category }}">{{ $category }}</option>@endforeach
+                    @foreach (\App\Models\ChargeRate::CATEGORIES as $category)<option value="{{ $category }}">{{ $category }}</option>@endforeach
                 </select>
             </label>
             <label class="text-sm">Description

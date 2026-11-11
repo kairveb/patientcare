@@ -213,6 +213,37 @@ class AdminUserAndBedSetupTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'DELETE_BED']);
     }
 
+    public function test_admin_with_setup_permissions_can_create_wards_rooms_and_beds(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $wardCode = 'QA-'.Str::upper(Str::random(6));
+
+        $this->actingAs($admin)->get(route('admin.bed-setup.index'))->assertOk();
+        $this->post(route('admin.bed-setup.wards.store'), [
+            'code' => $wardCode,
+            'name' => 'QA Ward '.Str::upper(Str::random(4)),
+            'type' => 'General',
+        ])->assertRedirect();
+
+        $ward = Ward::query()->where('code', $wardCode)->firstOrFail();
+        $this->post(route('admin.bed-setup.rooms.store'), [
+            'ward_id' => $ward->id,
+            'number' => 'QA-ADMIN-ROOM',
+            'type' => 'General',
+        ])->assertRedirect();
+
+        $room = Room::query()->where('ward_id', $ward->id)->firstOrFail();
+        $this->post(route('admin.bed-setup.beds.store'), [
+            'room_id' => $room->id,
+            'number' => 'A',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('beds', [
+            'room_id' => $room->id,
+            'number' => 'A',
+            'status' => Bed::STATUS_AVAILABLE,
+        ]);
+    }
+
     public function test_bed_setup_validates_duplicates_and_preserves_nonempty_hierarchy(): void
     {
         $admin = $this->superAdmin();

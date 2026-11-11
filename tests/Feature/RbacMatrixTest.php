@@ -125,21 +125,39 @@ class RbacMatrixTest extends TestCase
     {
         $this->seed(HimsSeeder::class);
 
+        $admin = User::factory()->create(['email' => 'sidebar-admin@example.test']);
+        $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail());
+
+        $modules = [
+            'Smart Patient Registration System (SPRS)',
+            'Appointment and Scheduling System (ASS)',
+            'Telehealth and Outpatient Care System (TOCS)',
+            'Emergency and ER Triage System (EERTS)',
+            'Inpatient and Bed Management System (IBMS)',
+        ];
         $roles = [
-            'super-admin' => ['show' => ['Operations', 'Reports', 'Audit Logs'], 'hide' => []],
-            'doctor' => ['show' => [], 'hide' => ['Operations', 'Reports', 'Audit Logs']],
-            'nurse' => ['show' => [], 'hide' => ['Operations', 'Reports', 'Audit Logs']],
-            'registration' => ['show' => [], 'hide' => ['Operations', 'Reports', 'Audit Logs']],
-            'patient' => ['show' => [], 'hide' => ['Operations', 'Reports', 'Audit Logs']],
+            'super-admin' => ['show' => [...$modules, 'Reports', 'Audit Logs'], 'hide' => []],
+            'doctor' => ['show' => $modules, 'hide' => ['Reports', 'Audit Logs']],
+            'nurse' => ['show' => [...$modules, 'Reports'], 'hide' => ['Audit Logs']],
+            'registration' => ['show' => [...$modules, 'Reports'], 'hide' => ['Audit Logs']],
+            'patient' => ['show' => array_values(array_diff($modules, ['Emergency and ER Triage System (EERTS)'])), 'hide' => ['Emergency and ER Triage System (EERTS)', 'Reports', 'Audit Logs']],
+            'admin' => ['show' => [$modules[0], $modules[1], $modules[4], 'Reports'], 'hide' => [$modules[2], $modules[3], 'Audit Logs']],
         ];
 
         foreach ($roles as $roleName => $expectations) {
-            $user = User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            $user = $roleName === 'admin'
+                ? $admin
+                : User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
             if ($roleName === 'patient') {
                 $this->acceptSeededPatientConsent($user);
             }
             $response = $this->actingAs($user, 'web')->get('/dashboard');
             $response->assertOk();
+            $visibleModules = array_values(array_filter(
+                $modules,
+                fn (string $module): bool => ! in_array($module, $expectations['hide'], true)
+            ));
+            $response->assertSeeInOrder($visibleModules);
 
             foreach ($expectations['show'] as $text) {
                 $response->assertSee($text);
@@ -378,16 +396,16 @@ class RbacMatrixTest extends TestCase
         $frontDeskResponse->assertDontSee('Bed occupancy');
     }
 
-    public function test_inpatient_sidebar_is_hidden_when_no_inpatient_children_are_visible_for_the_role(): void
+    public function test_ibms_sidebar_shows_only_links_available_to_each_role(): void
     {
         $this->seed(HimsSeeder::class);
 
         $roles = [
-            'doctor' => ['show' => true, 'items' => ['Bed Board', 'Admissions']],
-            'nurse' => ['show' => true, 'items' => ['Bed Board', 'Admissions']],
-            'registration' => ['show' => true, 'items' => ['Bed Board', 'Admissions']],
-            'patient' => ['show' => false, 'items' => ['Bed Board', 'Admissions']],
-            'super-admin' => ['show' => true, 'items' => ['Bed Board', 'Admissions']],
+            'doctor' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
+            'nurse' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
+            'registration' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
+            'patient' => ['items' => ['Discharge summaries'], 'hidden' => ['Bed Board', 'Admissions']],
+            'super-admin' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
         ];
 
         foreach ($roles as $roleName => $expectations) {
@@ -399,17 +417,14 @@ class RbacMatrixTest extends TestCase
 
             $response->assertOk();
 
-            if ($expectations['show']) {
-                $response->assertSee('Inpatient');
-                foreach ($expectations['items'] as $item) {
-                    $response->assertSee($item);
-                }
-
-            } else {
-                $response->assertDontSee('Inpatient');
-                foreach ($expectations['items'] as $item) {
-                    $response->assertDontSee($item);
-                }
+            if ($expectations['items'] !== []) {
+                $response->assertSee('Inpatient and Bed Management System (IBMS)');
+            }
+            foreach ($expectations['items'] as $item) {
+                $response->assertSee($item);
+            }
+            foreach ($expectations['hidden'] as $item) {
+                $response->assertDontSee($item);
             }
         }
     }

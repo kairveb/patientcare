@@ -9,7 +9,9 @@
             <h1 class="text-2xl font-bold text-slate-800">Bed Board</h1>
             <p class="text-sm text-slate-500 mt-1">Inpatient and Bed Management System (IBMS)</p>
         </div>
-        <a href="{{ route('admissions.index') }}" class="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700">Admissions</a>
+        @if (auth()->user()->can('view-admissions') && auth()->user()->hasAnyRole(['nurse', 'doctor', 'registration', 'super-admin']))
+            <a href="{{ route('admissions.index') }}" class="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700">Admissions</a>
+        @endif
     </div>
 
     <form method="GET" action="{{ route('beds.index') }}" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">

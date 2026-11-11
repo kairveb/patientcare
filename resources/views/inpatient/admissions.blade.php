@@ -72,7 +72,7 @@
                                     {{ $adm->status === 'REQUESTED' ? 'bg-amber-100 text-amber-700' : '' }}
                                 ">{{ $adm->status }}</span>
                             </td>
-                            <td class="py-3 px-4">{{ $bed?->label ?? '—' }}</td>
+                            <td class="py-3 px-4">{{ $bed?->label ?? 'No bed assigned' }}</td>
                             <td class="py-3 px-4 text-slate-500 text-xs">{{ $adm->created_at->format('M d, Y') }}</td>
                             <td class="py-3 px-4">
                                 <a href="{{ route('admissions.show', $adm) }}" class="text-teal-600 text-xs font-medium">View</a>

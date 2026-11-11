@@ -257,6 +257,45 @@ class InpatientBedStateWorkflowTest extends TestCase
         $this->assertSame(Bed::STATUS_OCCUPIED, $bed->fresh()->status);
     }
 
+    public function test_existing_admission_without_active_bed_can_be_assigned_without_changing_lifecycle(): void
+    {
+        [$admission, , $bed] = $this->fixture(Admission::STATUS_ADMITTED);
+        $originalAdmittedAt = $admission->admitted_at;
+        $registration = $this->registration();
+
+        $this->actingAs($registration)->get(route('admissions.show', $admission))
+            ->assertOk()
+            ->assertSee('No bed assigned to this admission.')
+            ->assertSee('Assign Missing Bed');
+        $this->actingAs($registration)->get(route('admissions.index'))
+            ->assertOk()
+            ->assertSee('No bed assigned');
+        $this->actingAs($registration)->post(route('admissions.admit', $admission), ['bed_id' => $bed->id])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Bed assigned to the existing admission.');
+
+        $this->assertSame(Admission::STATUS_ADMITTED, $admission->fresh()->status);
+        $this->assertEquals($originalAdmittedAt, $admission->fresh()->admitted_at);
+        $this->assertSame(Bed::STATUS_OCCUPIED, $bed->fresh()->status);
+        $this->assertDatabaseHas('bed_assignments', [
+            'admission_id' => $admission->id,
+            'bed_id' => $bed->id,
+            'status' => BedAssignment::STATUS_ACTIVE,
+        ]);
+
+        [$apiAdmission, , $apiBed] = $this->fixture(Admission::STATUS_TRANSFERRED);
+        $token = $registration->createToken('existing-admission-bed-assignment')->plainTextToken;
+        $this->withToken($token)->getJson("/api/v1/admissions/{$apiAdmission->id}")
+            ->assertOk()
+            ->assertJsonPath('data.bed_assignments', []);
+        $this->withToken($token)->postJson("/api/v1/beds/{$apiBed->id}/assign", [
+            'admission_id' => $apiAdmission->id,
+        ])->assertCreated()
+            ->assertJsonPath('data.status', BedAssignment::STATUS_ACTIVE);
+        $this->assertSame(Admission::STATUS_TRANSFERRED, $apiAdmission->fresh()->status);
+        $this->assertSame(Bed::STATUS_OCCUPIED, $apiBed->fresh()->status);
+    }
+
     public function test_direct_and_er_admission_creation_require_an_attending_provider(): void
     {
         $doctor = User::where('email', 'doctor@coor.test')->firstOrFail();

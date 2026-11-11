@@ -40,160 +40,110 @@
                 </header>
 
                 <nav class="sidebar-nav" aria-label="HIMS systems">
-                    <p class="nav-title">Overview</p>
                     <ul class="nav-list">
                         <li><a class="nav-link{{ request()->routeIs('dashboard') ? ' active' : '' }}" href="{{ route('dashboard') }}" aria-label="Dashboard" @if(request()->routeIs('dashboard')) aria-current="page" @endif><i class="ph-fill ph-squares-four" aria-hidden="true"></i><span class="nav-label">Dashboard</span></a></li>
-                        @if (auth()->user()->hasRole('patient'))
-                            @can('portal-dashboard')
-                                <li><a class="nav-link{{ request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries', 'patients.portal.approvals', 'patients.portal.approval', 'patient.reassignments.*') ? ' active' : '' }}" href="{{ route('patients.portal') }}" aria-label="Patient Portal" @if(request()->routeIs('patients.portal', 'patients.portal.appointments', 'patients.portal.history', 'patients.portal.telehealth', 'patients.portal.discharge-summaries', 'patients.portal.approvals', 'patients.portal.approval', 'patient.reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-user-circle" aria-hidden="true"></i><span class="nav-label">Patient Portal</span></a></li>
-                                <li><a class="nav-link{{ request()->routeIs('patients.portal.privacy', 'privacy.requests.show') ? ' active' : '' }}" href="{{ route('patients.portal.privacy') }}" aria-label="My Privacy"><i class="ph-fill ph-shield-check" aria-hidden="true"></i><span class="nav-label">My Privacy</span></a></li>
-                                <li><a class="nav-link{{ request()->routeIs('patient.reassignments.*') ? ' active' : '' }}" href="{{ route('patient.reassignments.index') }}" aria-label="Appointment updates" @if(request()->routeIs('patient.reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-warning" aria-hidden="true"></i><span class="nav-label">Appointment updates</span></a></li>
-                                <li><a class="nav-link{{ request()->routeIs('patients.portal.discharge-summaries') ? ' active' : '' }}" href="{{ route('patients.portal.discharge-summaries') }}" aria-label="My Discharge Summaries" @if(request()->routeIs('patients.portal.discharge-summaries')) aria-current="page" @endif><i class="ph-fill ph-file-text" aria-hidden="true"></i><span class="nav-label">Discharge summaries</span></a></li>
-                                <li><a class="nav-link{{ request()->routeIs('patients.portal.approvals', 'patients.portal.approval') ? ' active' : '' }}" href="{{ route('patients.portal.approvals') }}" aria-label="My Approvals" @if(request()->routeIs('patients.portal.approvals', 'patients.portal.approval')) aria-current="page" @endif><i class="ph-fill ph-file-check" aria-hidden="true"></i><span class="nav-label">My Approvals</span></a></li>
-                            @endcan
-                        @endif
                     </ul>
 
                     @php
                         $user = auth()->user();
-                        $showHospitalSystemsSection = ! $user->hasRole('patient');
-
-                        if ($showHospitalSystemsSection) {
-                            $showHospitalSystemsSection = $user->can('view-patients')
-                                || $user->can('view-appointments')
-                                || $user->can('view-encounters')
-                                || $user->can('view-telehealth')
-                                || $user->can('view-er')
-                                || $user->can('view-beds')
-                                || $user->can('view-admissions')
-                                || $user->can('view-reports')
-                                || $user->can('view-audit-logs');
-                        }
+                        $modules = [
+                            [
+                                'id' => 'nav-sprs',
+                                'label' => 'Smart Patient Registration System (SPRS)',
+                                'icon' => 'ph-users-three',
+                                'items' => [
+                                    ['label' => 'Patient List', 'route' => 'patients.index', 'permission' => 'view-patients', 'active' => ['patients.index', 'patients.show', 'patients.vitals']],
+                                    ['label' => 'Patient Portal', 'route' => 'patients.portal', 'permission' => 'portal-dashboard', 'roles' => ['patient'], 'active' => ['patients.portal', 'patients.portal.*']],
+                                    ['label' => 'Patient Profile', 'route' => 'patients.profile', 'roles' => ['patient'], 'active' => ['patients.profile', 'patients.profile.*']],
+                                    ['label' => 'Profile', 'route' => 'profile.edit', 'active' => ['profile.edit']],
+                                    ['label' => 'Privacy requests', 'route' => 'privacy.requests.queue', 'roles' => ['registration', 'admin', 'super-admin'], 'active' => ['privacy.requests.queue', 'privacy.requests.staff.*']],
+                                    ['label' => 'My Privacy', 'route' => 'patients.portal.privacy', 'permission' => 'portal-dashboard', 'roles' => ['patient'], 'active' => ['patients.portal.privacy', 'privacy.requests.show']],
+                                    ['label' => 'User Management', 'route' => 'admin.users.index', 'permission' => 'manage-users', 'roles' => ['admin', 'super-admin'], 'active' => ['admin.users.*']],
+                                    ['label' => 'Reports', 'route' => 'reports.index', 'permission' => 'view-reports', 'roles' => ['nurse', 'registration', 'admin', 'super-admin'], 'active' => ['reports.*']],
+                                    ['label' => 'Audit Logs', 'route' => 'audit.index', 'permission' => 'view-audit-logs', 'roles' => ['super-admin'], 'active' => ['audit.*']],
+                                ],
+                            ],
+                            [
+                                'id' => 'nav-ass',
+                                'label' => 'Appointment and Scheduling System (ASS)',
+                                'icon' => 'ph-calendar-check',
+                                'items' => [
+                                    ['label' => 'Appointments', 'route' => 'appointments.index', 'permission' => 'view-appointments', 'active' => ['appointments.*']],
+                                    ['label' => 'My Appointments', 'route' => 'patients.portal.appointments', 'permission' => 'portal-dashboard', 'roles' => ['patient'], 'active' => ['patients.portal.appointments']],
+                                    ['label' => 'Appointment updates', 'route' => 'patient.reassignments.index', 'roles' => ['patient'], 'active' => ['patient.reassignments.*']],
+                                    ['label' => 'Provider coverage', 'route' => 'appointment-reassignments.index', 'roles' => ['registration', 'admin', 'super-admin'], 'active' => ['appointment-reassignments.*']],
+                                    ['label' => 'Report unavailability', 'route' => 'provider-unavailabilities.create', 'roles' => ['doctor'], 'active' => ['provider-unavailabilities.*']],
+                                    ['label' => 'Report unavailability', 'route' => 'provider-unavailabilities.create', 'permission' => 'manage-provider-schedules', 'roles' => ['nurse'], 'active' => ['provider-unavailabilities.*']],
+                                ],
+                            ],
+                            [
+                                'id' => 'nav-tocs',
+                                'label' => 'Telehealth and Outpatient Care System (TOCS)',
+                                'icon' => 'ph-heartbeat',
+                                'items' => [
+                                    ['label' => 'Outpatient', 'route' => 'outpatient.index', 'permission' => 'view-encounters', 'active' => ['outpatient.*', 'encounters.*']],
+                                    ['label' => 'Doctor Queue', 'route' => 'doctors.queue', 'permission' => 'view-opd-queue', 'roles' => ['doctor', 'nurse', 'registration', 'super-admin'], 'active' => ['doctors.queue*']],
+                                    ['label' => 'Outpatient approvals', 'route' => 'care-requests.index', 'permission' => 'view-care-requests', 'roles' => ['doctor', 'nurse', 'registration', 'super-admin'], 'active' => ['care-requests.*']],
+                                    ['label' => 'My Approvals', 'route' => 'patients.portal.approvals', 'permission' => 'view-care-requests', 'roles' => ['patient'], 'active' => ['patients.portal.approvals', 'patients.portal.approval']],
+                                    ['label' => 'Telehealth', 'route' => 'telehealth.index', 'permission' => 'view-telehealth', 'roles' => ['doctor', 'nurse', 'super-admin'], 'active' => ['telehealth.*']],
+                                    ['label' => 'My Telehealth', 'route' => 'patients.portal.telehealth', 'permission' => 'portal-dashboard', 'roles' => ['patient'], 'active' => ['patients.portal.telehealth*']],
+                                    ['label' => 'Billing Rates', 'route' => 'billing.rates.index', 'permission' => 'manage-billing', 'roles' => ['super-admin'], 'active' => ['billing.rates.*']],
+                                ],
+                            ],
+                            [
+                                'id' => 'nav-eerts',
+                                'label' => 'Emergency and ER Triage System (EERTS)',
+                                'icon' => 'ph-first-aid-kit',
+                                'items' => [
+                                    ['label' => 'Triage', 'route' => 'triage.dashboard', 'permission' => 'triage-patients', 'roles' => ['nurse', 'doctor', 'super-admin'], 'active' => ['triage.*']],
+                                    ['label' => 'ER / Emergency', 'route' => 'emergency.index', 'permission' => 'view-er', 'roles' => ['nurse', 'doctor', 'super-admin', 'registration'], 'active' => ['emergency.*']],
+                                ],
+                            ],
+                            [
+                                'id' => 'nav-ibms',
+                                'label' => 'Inpatient and Bed Management System (IBMS)',
+                                'icon' => 'ph-bed',
+                                'items' => [
+                                    ['label' => 'Bed Board', 'route' => 'beds.index', 'permission' => 'view-beds', 'roles' => ['nurse', 'doctor', 'registration', 'super-admin'], 'active' => ['beds.*', 'inpatient.*']],
+                                    ['label' => 'Admissions', 'route' => 'admissions.index', 'permission' => 'view-admissions', 'roles' => ['nurse', 'doctor', 'registration', 'super-admin'], 'active' => ['admissions.*']],
+                                    ['label' => 'Discharge summaries', 'route' => 'patients.portal.discharge-summaries', 'permission' => 'portal-dashboard', 'roles' => ['patient'], 'active' => ['patients.portal.discharge-summaries']],
+                                    ['label' => 'Bed Setup', 'route' => 'admin.bed-setup.index', 'permissions' => ['manage-wards', 'manage-beds'], 'roles' => ['admin', 'super-admin'], 'active' => ['admin.bed-setup.*']],
+                                ],
+                            ],
+                        ];
                     @endphp
-                    @if ($showHospitalSystemsSection)
-                    <p class="nav-title">Hospital Systems</p>
-                    <ul class="nav-list nav-domain-list">
-                        @if (auth()->user()->hasAnyRole(['admin','registration','super-admin']))
-                            <li><a class="nav-link{{ request()->routeIs('appointment-reassignments.*') ? ' active' : '' }}" href="{{ route('appointment-reassignments.index') }}" aria-label="Provider coverage" @if(request()->routeIs('appointment-reassignments.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Provider coverage</span></a></li>
-                        @elseif (auth()->user()->hasRole('doctor'))
-                            <li><a class="nav-link{{ request()->routeIs('provider-unavailabilities.*') ? ' active' : '' }}" href="{{ route('provider-unavailabilities.create') }}" aria-label="Report unavailability" @if(request()->routeIs('provider-unavailabilities.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Report unavailability</span></a></li>
-                        @elseif (auth()->user()->hasRole('nurse') && auth()->user()->can('manage-provider-schedules'))
-                            <li><a class="nav-link{{ request()->routeIs('provider-unavailabilities.*') ? ' active' : '' }}" href="{{ route('provider-unavailabilities.create') }}" aria-label="Report unavailability" @if(request()->routeIs('provider-unavailabilities.*')) aria-current="page" @endif><i class="ph-fill ph-calendar-x" aria-hidden="true"></i><span class="nav-label">Report unavailability</span></a></li>
-                        @endif
-                        @if (auth()->user()->hasAnyRole(['registration', 'admin', 'super-admin']))
-                            <li><a class="nav-link{{ request()->routeIs('privacy.requests.queue') ? ' active' : '' }}" href="{{ route('privacy.requests.queue') }}" aria-label="Data subject requests"><i class="ph-fill ph-lock-key" aria-hidden="true"></i><span class="nav-label">Privacy requests</span></a></li>
-                        @endif
-                        @can('view-patients')
-                        <li class="nav-accordion{{ request()->routeIs('patients.*') ? ' is-expanded is-active' : '' }}">
-                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('patients.*') ? 'true' : 'false' }}" aria-controls="nav-patients" aria-label="Patient Management"><i class="ph-fill ph-users-three" aria-hidden="true"></i><span class="nav-label">Patients</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
-                            <ul class="nav-submenu" id="nav-patients" @if(!request()->routeIs('patients.*')) hidden @endif>
-                                @if (auth()->user()->hasAnyRole(['registration','doctor','nurse','super-admin']))
-                                    <li><a href="{{ route('patients.index') }}" class="{{ request()->routeIs('patients.index', 'patients.show', 'patients.vitals') ? 'active' : '' }}">Patient List</a></li>
-                                @endif
-                            </ul>
-                        </li>
-                        @endcan
 
+                    @foreach ($modules as $module)
                         @php
-                            $isPatientUser = auth()->user()->hasRole('patient');
-                            $careDeliveryVisibleLinks = [];
-                            if (auth()->user()->can('view-appointments')) { $careDeliveryVisibleLinks[] = 'appointments'; }
-                            if (auth()->user()->can('view-encounters')) { $careDeliveryVisibleLinks[] = 'encounters'; }
-                            if (auth()->user()->can('view-care-requests') && auth()->user()->hasAnyRole(['doctor','nurse','registration','super-admin'])) { $careDeliveryVisibleLinks[] = 'care-requests'; }
-                            if (auth()->user()->can('view-telehealth') && auth()->user()->hasAnyRole(['doctor','nurse','super-admin'])) { $careDeliveryVisibleLinks[] = 'telehealth'; }
-                            if (auth()->user()->can('view-er') && auth()->user()->hasAnyRole(['nurse','doctor','super-admin','registration'])) { $careDeliveryVisibleLinks[] = 'er'; }
+                            $visibleItems = array_values(array_filter($module['items'], static function (array $item) use ($user): bool {
+                                return (! isset($item['permission']) || $user->can($item['permission']))
+                                    && (! isset($item['permissions']) || collect($item['permissions'])->every(fn (string $permission): bool => $user->can($permission)))
+                                    && (! isset($item['roles']) || $user->hasAnyRole($item['roles']));
+                            }));
+                            $moduleActive = collect($visibleItems)->contains(
+                                fn (array $item): bool => request()->routeIs(...$item['active'])
+                            );
                         @endphp
-                        @if (! $isPatientUser || ! empty($careDeliveryVisibleLinks))
-                        <li class="nav-accordion{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? ' is-expanded is-active' : '' }}">
-                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*') ? 'true' : 'false' }}" aria-controls="nav-care" aria-label="Care Delivery"><i class="ph-fill ph-heartbeat" aria-hidden="true"></i><span class="nav-label">Care Delivery</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
-                            <ul class="nav-submenu" id="nav-care" @if(!request()->routeIs('appointments.*', 'outpatient.*', 'encounters.*', 'care-requests.*', 'telehealth.*', 'emergency.*', 'doctors.queue*')) hidden @endif>
-                                @can('view-appointments')
-                                    <li><a href="{{ route('appointments.index') }}" class="{{ request()->routeIs('appointments.*') ? 'active' : '' }}">Appointments</a></li>
-                                @endcan
-                                @can('view-encounters')
-                                    @if (auth()->user()->hasAnyRole(['doctor','super-admin','nurse']))
-                                        <li><a href="{{ route('outpatient.index') }}" class="{{ request()->routeIs('outpatient.index', 'encounters.*') ? 'active' : '' }}">Outpatient</a></li>
-                                    @endif
-                                    @if (auth()->user()->hasAnyRole(['doctor','super-admin']))
-                                        <li><a href="{{ route('doctors.queue') }}" class="{{ request()->routeIs('doctors.queue') ? 'active' : '' }}">Doctor Queue</a></li>
-                                    @endif
-                                @endcan
-                                @can('view-care-requests')
-                                    @if (auth()->user()->hasAnyRole(['doctor','nurse','registration','super-admin']))
-                                        <li><a href="{{ route('care-requests.index') }}" class="{{ request()->routeIs('care-requests.*') ? 'active' : '' }}">Outpatient approvals</a></li>
-                                    @endif
-                                @endcan
-                                @can('view-telehealth')
-                                    @if (auth()->user()->hasAnyRole(['doctor','nurse','super-admin']))
-                                        <li><a href="{{ route('telehealth.index') }}" class="{{ request()->routeIs('telehealth.*') ? 'active' : '' }}">Telehealth</a></li>
-                                    @endif
-                                @endcan
-                                @can('view-er')
-                                    @if (auth()->user()->hasAnyRole(['nurse','doctor','super-admin','registration']))
-                                        <li><a href="{{ route('emergency.index') }}" class="{{ request()->routeIs('emergency.*') ? 'active' : '' }}">ER / Emergency</a></li>
-                                    @endif
-                                @endcan
+                        @if ($visibleItems !== [])
+                            <ul class="nav-list nav-domain-list">
+                                <li class="nav-accordion{{ $moduleActive ? ' is-expanded is-active' : '' }}">
+                                    <button class="nav-link nav-link-button nav-accordion__toggle nav-module-toggle" type="button" aria-expanded="{{ $moduleActive ? 'true' : 'false' }}" aria-controls="{{ $module['id'] }}" aria-label="{{ $module['label'] }}">
+                                        <i class="ph-fill {{ $module['icon'] }}" aria-hidden="true"></i>
+                                        <span class="nav-label">{{ $module['label'] }}</span>
+                                        <i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i>
+                                    </button>
+                                    <ul class="nav-submenu" id="{{ $module['id'] }}" @if(! $moduleActive) hidden @endif>
+                                        @foreach ($visibleItems as $item)
+                                            @php $itemActive = request()->routeIs(...$item['active']); @endphp
+                                            <li>
+                                                <a href="{{ route($item['route']) }}" class="{{ $itemActive ? 'active' : '' }}" @if($itemActive) aria-current="page" @endif>{{ $item['label'] }}</a>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </li>
                             </ul>
-                        </li>
                         @endif
-
-                        @php
-                            $inpatientVisibleLinks = [];
-                            if ($user->can('view-beds') && $user->hasAnyRole(['nurse', 'doctor', 'registration', 'super-admin'])) {
-                                $inpatientVisibleLinks[] = 'beds';
-                            }
-                            if ($user->can('view-admissions') && $user->hasAnyRole(['nurse', 'doctor', 'registration', 'super-admin'])) {
-                                $inpatientVisibleLinks[] = 'admissions';
-                            }
-                        @endphp
-                        @if (! empty($inpatientVisibleLinks))
-                        <li class="nav-accordion{{ request()->routeIs('beds.*', 'admissions.*', 'inpatient.*') ? ' is-expanded is-active' : '' }}">
-                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('beds.*', 'admissions.*', 'inpatient.*') ? 'true' : 'false' }}" aria-controls="nav-inpatient" aria-label="Inpatient Services"><i class="ph-fill ph-bed" aria-hidden="true"></i><span class="nav-label">Inpatient</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
-                            <ul class="nav-submenu" id="nav-inpatient" @if(!request()->routeIs('beds.*', 'admissions.*', 'inpatient.*')) hidden @endif>
-                                @if (in_array('beds', $inpatientVisibleLinks, true))
-                                    <li><a href="{{ route('beds.index') }}" class="{{ request()->routeIs('beds.index', 'inpatient.index') ? 'active' : '' }}">Bed Board</a></li>
-                                @endif
-                                @if (in_array('admissions', $inpatientVisibleLinks, true))
-                                    <li><a href="{{ route('admissions.index') }}" class="{{ request()->routeIs('admissions.*') ? 'active' : '' }}">Admissions</a></li>
-                                @endif
-                            </ul>
-                        </li>
-                        @endif
-
-                        @php
-                            $canViewReports = $user->can('view-reports') && $user->hasAnyRole(['admin', 'super-admin']);
-                            $canViewAuditLogs = $user->can('view-audit-logs') && $user->hasRole('super-admin');
-                            $showOperationsMenu = $canViewReports || $canViewAuditLogs;
-                        @endphp
-                        @if ($showOperationsMenu)
-                        <li class="nav-accordion{{ request()->routeIs('reports.*', 'audit.*') ? ' is-expanded is-active' : '' }}">
-                            <button class="nav-link nav-link-button nav-accordion__toggle" type="button" aria-expanded="{{ request()->routeIs('reports.*', 'audit.*') ? 'true' : 'false' }}" aria-controls="nav-ops" aria-label="Operations"><i class="ph-fill ph-chart-pie-slice" aria-hidden="true"></i><span class="nav-label">Operations</span><i class="ph ph-caret-down nav-chevron" aria-hidden="true"></i></button>
-                            <ul class="nav-submenu" id="nav-ops" @if(!request()->routeIs('reports.*', 'audit.*')) hidden @endif>
-                                @if ($canViewReports)
-                                    <li><a href="{{ route('reports.index') }}" class="{{ request()->routeIs('reports.*') ? 'active' : '' }}">Reports</a></li>
-                                @endif
-                                @if ($canViewAuditLogs)
-                                    <li><a href="{{ route('audit.index') }}" class="{{ request()->routeIs('audit.*') ? 'active' : '' }}">Audit Logs</a></li>
-                                @endif
-                                @if ($user->hasRole('super-admin') && $user->can('manage-billing'))
-                                    <li><a href="{{ route('billing.rates.index') }}" class="{{ request()->routeIs('billing.rates.*') ? 'active' : '' }}">Billing Rates</a></li>
-                                @endif
-                            </ul>
-                        </li>
-                        @endif
-                    </ul>
-                    @endif
-                    @if ($user->hasAnyRole(['admin', 'super-admin']))
-                        <p class="nav-title">Administration</p>
-                        <ul class="nav-list">
-                            @can('manage-users')
-                                <li><a class="nav-link{{ request()->routeIs('admin.users.*') ? ' active' : '' }}" href="{{ route('admin.users.index') }}"><i class="ph-fill ph-users" aria-hidden="true"></i><span class="nav-label">User Management</span></a></li>
-                            @endcan
-                            @if ($user->can('manage-wards') && $user->can('manage-beds'))
-                                <li><a class="nav-link{{ request()->routeIs('admin.bed-setup.*') ? ' active' : '' }}" href="{{ route('admin.bed-setup.index') }}"><i class="ph-fill ph-bed" aria-hidden="true"></i><span class="nav-label">Bed Setup</span></a></li>
-                            @endif
-                        </ul>
-                    @endif
+                    @endforeach
                 </nav>
 
                 <footer class="sidebar-footer">
@@ -204,8 +154,6 @@
                             <i class="ph ph-caret-up-down profile-chevron" aria-hidden="true"></i>
                         </button>
                         <div class="profile-menu" id="profile-menu" role="menu" hidden>
-                            <a class="profile-menu-link" href="{{ route('profile.edit') }}" role="menuitem"><i class="ph ph-user" aria-hidden="true"></i>Profile</a>
-                            <div class="profile-menu-divider" role="separator"></div>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <button class="profile-menu-link profile-menu-logout" type="submit" role="menuitem"><i class="ph ph-sign-out" aria-hidden="true"></i>Logout</button>
