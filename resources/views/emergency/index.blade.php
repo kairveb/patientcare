@@ -50,7 +50,9 @@
         <button type="button" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700" data-bs-toggle="modal" data-bs-target="#checkinLookupModal">Pre-arrival lookup</button>
         <div class="flex items-center gap-2">
             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Recommended</span>
-            <button type="button" class="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700" data-bs-toggle="modal" data-bs-target="#triageModal">Patient Triage Intake</button>
+            @if ($canCreateErVisit)
+                <button type="button" class="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700" data-bs-toggle="modal" data-bs-target="#triageModal">Patient Triage Intake</button>
+            @endif
         </div>
     </div>
 
@@ -65,7 +67,9 @@
                     <a href="{{ route('emergency.index') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Clear filters</a>
                 @endif
                 <div class="flex flex-col items-end gap-1 text-right">
-                    <button type="button" class="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700" data-bs-toggle="modal" data-bs-target="#intakeModal">New ER Intake</button>
+                    @if ($canCreateErVisit)
+                        <button type="button" class="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700" data-bs-toggle="modal" data-bs-target="#intakeModal">New ER Intake</button>
+                    @endif
                 </div>
             </div>
         </div>
@@ -359,6 +363,7 @@
     </div>
 </div>
 
+@if ($canCreateErVisit)
 <div class="modal fade" id="intakeModal" tabindex="-1" aria-labelledby="intakeModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-2xl">
@@ -432,7 +437,9 @@
         </div>
     </div>
 </div>
+@endif
 
+@if ($canCreateErVisit)
 <div class="modal fade" id="triageModal" tabindex="-1" aria-labelledby="triageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content border-0 shadow-2xl">
@@ -557,6 +564,7 @@
         </div>
     </div>
 </div>
+@endif
 
 @push('scripts')
 <script>

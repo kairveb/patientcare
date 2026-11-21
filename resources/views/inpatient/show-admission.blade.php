@@ -29,6 +29,60 @@
         </div>
     </div>
 
+    @if ($transportRequest && auth()->user()->can('view', $transportRequest))
+        <section class="rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <h3 class="font-semibold text-slate-800">Patient transport</h3>
+            <p class="mt-1 text-sm text-slate-700">Status: {{ $transportRequest->status }} · Vehicle: {{ $transportRequest->vehicle_ref ?? '—' }} · ETA: {{ $transportRequest->eta_at?->format('M d, Y g:i A') ?? '—' }}</p>
+            @can('cancel', $transportRequest)
+                @if (! in_array($transportRequest->status, ['COMPLETED', 'CANCELLED'], true))
+                    <form method="POST" action="{{ route('transport-requests.cancel', $transportRequest) }}" class="mt-3">
+                        @csrf
+                        <button class="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-rose-700">Cancel transport request</button>
+                    </form>
+                @endif
+            @endcan
+        </section>
+    @endif
+    @if (auth()->user()?->hasAnyRole(['nurse', 'registration', 'super-admin']) && auth()->user()->hasPermission('request-patient-transport') && auth()->user()->hasPermission('view-admissions'))
+        @if (! $transportRequest || in_array($transportRequest->status, ['COMPLETED', 'CANCELLED', 'FAILED'], true))
+            <section class="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 class="font-semibold text-slate-800">Request transport</h3>
+                <form method="POST" action="{{ route('admissions.transport-requests.store', $admission) }}" class="mt-3 space-y-3">
+                    @csrf
+                    <label class="block text-sm">Priority
+                        <select name="priority" required class="mt-1 w-full rounded border-slate-300">
+                            <option value="ROUTINE">Routine</option>
+                            <option value="URGENT">Urgent</option>
+                            <option value="EMERGENCY">Emergency</option>
+                        </select>
+                    </label>
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <label class="text-sm">Pickup zone
+                            <select name="pickup_zone" required class="mt-1 w-full rounded border-slate-300">
+                                @foreach (config('integrations.zones') as $code => $label)
+                                    <option value="{{ $code }}" @selected($code === 'WARD')>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm">Destination zone
+                            <select name="destination_zone" required class="mt-1 w-full rounded border-slate-300">
+                                @foreach (config('integrations.zones') as $code => $label)
+                                    <option value="{{ $code }}" @selected($code === 'MAIN_ENTRANCE')>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </div>
+                    <div class="flex flex-wrap gap-4 text-sm">
+                        <label><input type="checkbox" name="needs[stretcher_required]" value="1"> Stretcher</label>
+                        <label><input type="checkbox" name="needs[oxygen_support]" value="1"> Oxygen support</label>
+                        <label><input type="checkbox" name="needs[wheelchair]" value="1"> Wheelchair</label>
+                    </div>
+                    <button class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white">Request transport</button>
+                </form>
+            </section>
+        @endif
+    @endif
+
     @php
         $activeBedAssignment = $admission->bedAssignments->firstWhere('status', \App\Models\BedAssignment::STATUS_ACTIVE);
     @endphp
@@ -148,6 +202,11 @@
             <div><span class="text-slate-500">Status:</span> <span class="px-2 py-1 text-xs rounded-full bg-slate-100 ml-1">{{ $admission->status }}</span></div>
             <div><span class="text-slate-500">Attending:</span> <span class="font-medium">{{ $admission->attendingProvider->full_name ?? '—' }}</span></div>
             <div><span class="text-slate-500">Reason:</span> {{ $admission->reason ?? '—' }}</div>
+            @if ($admission->coverage_code)
+                <div><span class="text-slate-500">LOA status:</span> {{ $admission->loa_status ?? 'PENDING' }}</div>
+                <div><span class="text-slate-500">Approved amount:</span> {{ $admission->loa_approved_amount ?? '—' }}</div>
+                <div><span class="text-slate-500">Payer reference:</span> {{ $admission->loa_payer_reference ?? '—' }}</div>
+            @endif
         </div>
 
         @role('registration', 'super-admin')
@@ -177,6 +236,16 @@
                         <input id="loa_reference" name="loa_reference" value="{{ old('loa_reference', $admission->loa_reference) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                         @error('loa_reference')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
+                    <div>
+                        <label for="coverage_code" class="mb-1 block text-sm font-medium text-slate-700">Insurance coverage code</label>
+                        <input id="coverage_code" name="coverage_code" value="{{ old('coverage_code', $admission->coverage_code) }}" maxlength="80" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        @error('coverage_code')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label for="loa_requested_amount" class="mb-1 block text-sm font-medium text-slate-700">LOA requested amount</label>
+                        <input id="loa_requested_amount" name="loa_requested_amount" type="number" min="0.01" step="0.01" value="{{ old('loa_requested_amount', $admission->loa_requested_amount) }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        @error('loa_requested_amount')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
                     <div class="md:col-span-2">
                         <button type="submit" class="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white">Save guarantor details</button>
                     </div>
@@ -190,7 +259,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h3 class="font-semibold text-slate-800">Billing clearance request</h3>
-                        <p class="mt-1 text-sm text-slate-600">Request only; Billing manages clearance and payment status separately.</p>
+                        <p class="mt-1 text-sm text-slate-600">Request only; billing clearance status is returned by the billing partner.</p>
                     </div>
                     @if (in_array($admission->status, ['ADMITTED', 'TRANSFERRED']) && $admission->dischargeSummary?->status === \App\Models\DischargeSummary::STATUS_APPROVED)
                         <form method="POST" action="{{ route('admissions.billing-clearance.request', $admission) }}">
@@ -206,7 +275,15 @@
                         @foreach ($admission->billingClearanceRequests as $clearanceRequest)
                             <li class="flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-2">
                                 <span>Status: {{ $clearanceRequest->status }}</span>
+                                <span>Partner status: {{ $clearanceRequest->integration_status ?? '—' }}</span>
                                 <span>Requested {{ $clearanceRequest->requested_at?->format('M d, Y g:i A') ?? '—' }} by {{ $clearanceRequest->requestedBy?->name ?? 'staff' }}</span>
+                                @if ($clearanceRequest->status === 'REQUESTED' && auth()->user()->hasRole('super-admin') && auth()->user()->can('manage-billing'))
+                                    <form method="POST" action="{{ route('admissions.billing-clearance.decision', $admission) }}" class="flex gap-2">
+                                        @csrf
+                                        <button name="decision" value="CLEARED" class="rounded border border-emerald-300 px-2 py-1 text-emerald-800">Clear</button>
+                                        <button name="decision" value="REJECTED" class="rounded border border-rose-300 px-2 py-1 text-rose-800">Reject</button>
+                                    </form>
+                                @endif
                             </li>
                         @endforeach
                     </ul>

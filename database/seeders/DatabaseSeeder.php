@@ -20,6 +20,8 @@ class DatabaseSeeder extends Seeder
             RbacReconciliationSeeder::class,
             AdminRoleSeeder::class,
             CareRequestRbacSeeder::class,
+            IntegrationPartnerSeeder::class,
+            IntegrationRbacSeeder::class,
         ]);
 
         if (! app()->environment('production')) {

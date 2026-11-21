@@ -15,6 +15,7 @@ use App\Models\Room;
 use App\Models\User;
 use App\Models\Ward;
 use Database\Seeders\HimsSeeder;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -22,7 +23,19 @@ class WorkflowControlsVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_appointment_controls_are_only_rendered_for_registration_and_super_admin(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow('2026-11-18 10:00:00');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_appointment_controls_are_rendered_for_nurse_registration_and_super_admin(): void
     {
         config(['security.otp_enabled' => false]);
         $this->seed(HimsSeeder::class);
@@ -43,7 +56,7 @@ class WorkflowControlsVisibilityTest extends TestCase
             'status' => Appointment::STATUS_CONFIRMED,
         ]);
 
-        foreach ([$doctor, $nurse] as $user) {
+        foreach ([$doctor] as $user) {
             $this->actingAs($user)->get('/appointments')
                 ->assertOk()
                 ->assertDontSee('Book Appointment')
@@ -56,6 +69,17 @@ class WorkflowControlsVisibilityTest extends TestCase
                 ->assertDontSee('Reschedule')
                 ->assertDontSee('Mark No-Show');
         }
+
+        $this->actingAs($nurse)->get('/appointments')
+            ->assertOk()
+            ->assertSee('Book Appointment')
+            ->assertSee('id="appointmentModal"', false);
+        $this->actingAs($nurse)->get("/appointments/{$appointment->id}")
+            ->assertOk()
+            ->assertDontSee('Check In')
+            ->assertDontSee('Cancel')
+            ->assertDontSee('Reschedule')
+            ->assertDontSee('Mark No-Show');
 
         $patientUser = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
         $this->acceptRequiredPrivacyDocuments($patientUser->patient, $patientUser);
@@ -87,15 +111,11 @@ class WorkflowControlsVisibilityTest extends TestCase
         $this->seed(HimsSeeder::class);
 
         $doctor = User::whereHas('roles', fn ($query) => $query->where('name', 'doctor'))->firstOrFail();
+        $patient = Patient::query()->firstOrFail();
         $this->actingAs($doctor)->get('/patients')
             ->assertOk()
             ->assertDontSee('Book Appointment')
             ->assertDontSee('id="patientBookingModal"');
-
-        $patient = Patient::query()->firstOrFail();
-        $this->actingAs($doctor)->get("/patients/{$patient->id}")
-            ->assertOk()
-            ->assertDontSee('Book Appointment');
 
         foreach (['registration', 'super-admin'] as $role) {
             $user = User::whereHas('roles', fn ($query) => $query->where('name', $role))->firstOrFail();

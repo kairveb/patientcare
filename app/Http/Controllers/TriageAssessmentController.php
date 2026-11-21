@@ -6,6 +6,8 @@ use App\Http\Requests\StoreTriageDecisionRequest;
 use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\TriageAssessment;
+use App\Models\User;
+use App\Policies\ErVisitPolicy;
 use App\Services\EmergencyAlertService;
 use App\Services\TriageService;
 use App\Support\TriageDecisionRules;
@@ -24,12 +26,16 @@ class TriageAssessmentController extends Controller
     public function create(): View
     {
         $patients = Patient::orderBy('last_name')->get();
+        $user = auth()->user();
+        $canCreateErVisit = $user instanceof User && app(ErVisitPolicy::class)->create($user);
 
-        return view('triage.create', compact('patients'));
+        return view('triage.create', compact('patients', 'canCreateErVisit'));
     }
 
     public function store(StoreTriageDecisionRequest $request): RedirectResponse|JsonResponse
     {
+        $user = $request->user();
+        abort_unless($user instanceof User && app(ErVisitPolicy::class)->create($user), 403);
         $data = $request->validated();
 
         $symptoms = $request->normalizedSymptoms();

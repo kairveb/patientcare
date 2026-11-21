@@ -170,6 +170,7 @@ class EncounterController extends Controller
             'careRequests.decidedBy',
             'careRequests.clinicalDocument',
             'careRequests.statusHistories.user',
+            'integrationClinicalDocuments.partner',
         ]);
         if (auth()->user()->hasAnyRole(['doctor', 'nurse', 'registration', 'admin', 'super-admin'])) {
             $this->audit->viewPatientClinicalData(

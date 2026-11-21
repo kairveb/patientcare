@@ -32,9 +32,12 @@ class AdminRoleSeeder extends Seeder
             ]);
         }
 
-        Role::query()->where('name', 'admin')->firstOrFail()
-            ->permissions()->syncWithoutDetaching(
-                Permission::query()->whereIn('name', $permissionNames)->pluck('id')
-            );
+        $admin = Role::query()->where('name', 'admin')->firstOrFail();
+        $admin->permissions()->syncWithoutDetaching(
+            Permission::query()->whereIn('name', $permissionNames)->pluck('id')
+        );
+        $admin->permissions()->detach(
+            Permission::query()->whereIn('name', ['view-er', 'view-admissions'])->pluck('id')
+        );
     }
 }

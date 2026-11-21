@@ -81,7 +81,15 @@ class TriageGcsTest extends TestCase
     {
         $role = Role::firstOrCreate(['name' => $roleName], ['label' => ucfirst($roleName)]);
         $permission = Permission::firstOrCreate(['name' => 'triage-patients'], ['label' => 'Triage Patients']);
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $permissions = [$permission->id];
+        if ($roleName === 'nurse') {
+            $createErPermission = Permission::firstOrCreate(
+                ['name' => 'create-er-visits'],
+                ['label' => 'Create ER Visits']
+            );
+            $permissions[] = $createErPermission->id;
+        }
+        $role->permissions()->syncWithoutDetaching($permissions);
         $user = User::factory()->create([
             'email' => $roleName.'.'.Str::uuid().'@example.test',
             'email_verified_at' => now(),

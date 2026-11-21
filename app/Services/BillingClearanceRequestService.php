@@ -63,8 +63,38 @@ class BillingClearanceRequestService
                 ['admission_id' => $lockedAdmission->id, 'discharge_summary_id' => $lockedAdmission->dischargeSummary->id],
                 $requester->id
             );
+            app(IntegrationOutboxService::class)->enqueue('bdms', 'billing_clearance', $clearanceRequest->id, [
+                'purpose' => 'billing_clearance',
+                'version' => '1',
+            ]);
 
             return $clearanceRequest;
+        });
+    }
+
+    public function decide(BillingClearanceRequest $request, User $actor, string $decision): BillingClearanceRequest
+    {
+        if (! in_array($decision, ['CLEARED', 'REJECTED'], true)) {
+            throw ValidationException::withMessages([
+                'decision' => ['Choose cleared or rejected.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($request, $actor, $decision): BillingClearanceRequest {
+            $locked = BillingClearanceRequest::query()->lockForUpdate()->findOrFail($request->id);
+            abort_unless($actor->hasRole('super-admin') && $actor->hasPermission('manage-billing'), 403);
+            if ($locked->status !== 'REQUESTED') {
+                throw ValidationException::withMessages([
+                    'status' => ['Only requested billing clearances can be decided.'],
+                ]);
+            }
+
+            $locked->update(['status' => $decision]);
+            $this->audit->log('DECIDE_BILLING_CLEARANCE', 'billing_clearance_request', $locked->id, 'SUCCESS', [
+                'decision' => $decision,
+            ], $actor->id);
+
+            return $locked->fresh();
         });
     }
 }

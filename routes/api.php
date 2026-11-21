@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AdmissionApiController;
+use App\Http\Controllers\Api\V1\IntegrationWebhookController;
+use App\Http\Controllers\Api\V1\IntegrationAdminApiController;
+use App\Http\Controllers\TransportRequestController;
 use App\Http\Controllers\AppointmentReassignmentController;
 use App\Http\Controllers\ConfidentialityAcknowledgementController;
 use App\Http\Controllers\Api\V1\ApiAuthController;
@@ -50,6 +53,48 @@ use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 */
 
 Route::prefix('v1')->group(function () {
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-payment-status'])
+        ->post('/integrations/{partner}/webhooks/payment-status', [IntegrationWebhookController::class, 'paymentStatus'])
+        ->whereIn('partner', ['bdms'])
+        ->name('api.v1.integrations.bdms.payment-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-loa-status'])
+        ->post('/integrations/{partner}/webhooks/loa-status', [IntegrationWebhookController::class, 'loaStatus'])
+        ->whereIn('partner', ['hics'])
+        ->name('api.v1.integrations.hics.loa-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-results'])
+        ->post('/integrations/lis/webhooks/results', [IntegrationWebhookController::class, 'lisResults'])
+        ->name('api.v1.integrations.lis.results');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-results'])
+        ->post('/integrations/ris/webhooks/results', [IntegrationWebhookController::class, 'risResults'])
+        ->name('api.v1.integrations.ris.results');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-dispense-status'])
+        ->post('/integrations/pms/webhooks/dispense-status', [IntegrationWebhookController::class, 'pmsDispenseStatus'])
+        ->name('api.v1.integrations.pms.dispense-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-clinical-document'])
+        ->post('/integrations/emrs/webhooks/clinical-document', [IntegrationWebhookController::class, 'emrsClinicalDocument'])
+        ->name('api.v1.integrations.emrs.clinical-document');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-provider-availability'])
+        ->match(['put', 'post'], '/integrations/hrms/providers/{externalId}/availability', [IntegrationWebhookController::class, 'hrmsProviderAvailability'])
+        ->name('api.v1.integrations.hrms.provider-availability');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-export-status'])
+        ->post('/integrations/hads/webhooks/export-status', [IntegrationWebhookController::class, 'hadsExportStatus'])
+        ->name('api.v1.integrations.hads.export-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-account-status'])
+        ->post('/integrations/sas/webhooks/account-status', [IntegrationWebhookController::class, 'sasAccountStatus'])
+        ->name('api.v1.integrations.sas.account-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:dispatch-status', 'throttle:30,1'])
+        ->post('/integrations/vrds/webhooks/dispatch-status', [IntegrationWebhookController::class, 'vrdsDispatchStatus'])
+        ->name('api.v1.integrations.vrds.dispatch-status');
+    Route::middleware(['integration.api.log', 'integration.webhook:webhook-user-provisioning'])
+        ->put('/integrations/sas/users/{externalId}', [IntegrationWebhookController::class, 'sasUserProvisioning'])
+        ->name('api.v1.integrations.sas.user-provisioning');
+    Route::middleware(['integration.api.log', 'integration.partner:integration-status-read'])
+        ->get('/integrations/partner/status', fn (\Illuminate\Http\Request $request) => response()->json([
+            'success' => true,
+            'data' => ['partner' => $request->attributes->get('integration_partner')->code],
+        ]))
+        ->name('api.v1.integrations.partner.status');
+
     // Public auth
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('/auth/login', [ApiAuthController::class, 'login']);
@@ -198,6 +243,8 @@ Route::prefix('v1')->group(function () {
             ->middleware(['can:manage-billing', 'throttle:20,1']);
         Route::post('/admissions/{admission}/billing-statements', [BillingApiController::class, 'generateAdmission'])
             ->middleware(['can:manage-billing', 'throttle:20,1']);
+        Route::post('/admissions/{admission}/billing-clearance/decision', [BillingApiController::class, 'decideClearance'])
+            ->middleware(['can:manage-billing', 'role:super-admin', 'throttle:20,1']);
         Route::post('/billing-statements/{bill}/payment', [BillingApiController::class, 'markPaid'])
             ->middleware(['can:manage-billing', 'throttle:20,1']);
         Route::post('/prescriptions/{prescription}/dispense', [BillingApiController::class, 'dispense'])
@@ -263,17 +310,27 @@ Route::prefix('v1')->group(function () {
             Route::delete('/provider-schedules/{id}', [ProviderScheduleApiController::class, 'destroy']);
         });
         Route::post('/provider-unavailabilities', [AppointmentReassignmentController::class, 'storeUnavailability'])
-            ->middleware(['role:doctor,nurse,registration,admin,super-admin', 'throttle:20,1']);
+            ->middleware(['role:doctor,registration,admin,super-admin', 'throttle:20,1']);
 
         // Emergency
-        Route::middleware(['can:view-er', 'throttle:60,1'])->group(function () {
+        Route::middleware(['can:viewAny,App\Models\TransportRequest', 'throttle:60,1'])->group(function () {
+            Route::get('/transport-requests', [TransportRequestController::class, 'indexApi']);
+            Route::get('/transport-requests/{transportRequest}', [TransportRequestController::class, 'showApi']);
+        });
+        Route::middleware(['can:create,App\Models\TransportRequest', 'role:nurse,registration,super-admin', 'throttle:30,1'])
+            ->post('/transport-requests', [TransportRequestController::class, 'storeApi']);
+        Route::middleware(['can:cancel,transportRequest', 'role:nurse,registration,super-admin', 'throttle:30,1'])
+            ->post('/transport-requests/{transportRequest}/cancel', [TransportRequestController::class, 'cancelApi']);
+
+        // Emergency
+        Route::middleware(['can:view-er', 'role:nurse,doctor,registration,super-admin', 'throttle:60,1'])->group(function () {
             Route::get('/emergency/queue', [EmergencyApiController::class, 'queue']);
             Route::get('/emergency/visits/{id}', [EmergencyApiController::class, 'showVisit']);
         });
-        Route::middleware(['can:create-er-visits', 'throttle:30,1'])->group(function () {
+        Route::middleware(['can:create,App\Models\ErVisit', 'role:nurse,registration,super-admin', 'throttle:30,1'])->group(function () {
             Route::post('/emergency/visits', [EmergencyApiController::class, 'storeVisit']);
         });
-        Route::middleware(['can:create-er-visits', 'role:registration,nurse', 'throttle:30,1'])->group(function () {
+        Route::middleware(['can:create,App\Models\ErVisit', 'role:registration,nurse,super-admin', 'throttle:30,1'])->group(function () {
             Route::post('/emergency/visits/unknown', [EmergencyApiController::class, 'storeUnknownVisit']);
         });
         Route::middleware(['can:triage-patients', 'throttle:30,1'])->group(function () {
@@ -327,7 +384,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Admissions
-        Route::middleware(['can:view-admissions', 'throttle:60,1'])->group(function () {
+        Route::middleware(['can:view-admissions', 'role:nurse,doctor,registration,super-admin', 'throttle:60,1'])->group(function () {
             Route::get('/admissions', [AdmissionApiController::class, 'index']);
             Route::get('/admissions/{id}', [AdmissionApiController::class, 'show']);
         });
@@ -347,6 +404,13 @@ Route::prefix('v1')->group(function () {
         Route::middleware('throttle:60,1')->group(function () {
             Route::get('/notifications', [NotificationApiController::class, 'index']);
             Route::post('/notifications/{id}/read', [NotificationApiController::class, 'markRead']);
+
+            Route::middleware(['can:viewAny,App\Models\IntegrationPartner', 'role:admin,super-admin'])
+                ->get('/integrations/admin', [IntegrationAdminApiController::class, 'index'])
+                ->name('api.v1.integrations.admin.index');
+            Route::middleware(['can:retry,outbox', 'role:super-admin'])
+                ->post('/integrations/admin/outbox/{outbox}/retry', [IntegrationAdminApiController::class, 'retry'])
+                ->name('api.v1.integrations.admin.retry');
         });
     });
 });

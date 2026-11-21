@@ -12,6 +12,53 @@
 
     @include('emergency._workflow-steps', ['currentStep' => $isQueued ? 4 : 3])
 
+    @if ($transportRequest && auth()->user()->can('view', $transportRequest))
+        <section class="rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <h3 class="font-semibold text-slate-800">Patient transport</h3>
+            <p class="mt-1 text-sm text-slate-700">Status: {{ $transportRequest->status }} · Vehicle: {{ $transportRequest->vehicle_ref ?? '—' }} · ETA: {{ $transportRequest->eta_at?->format('M d, Y g:i A') ?? '—' }}</p>
+            @can('cancel', $transportRequest)
+                @if (! in_array($transportRequest->status, ['COMPLETED', 'CANCELLED'], true))
+                    <form method="POST" action="{{ route('transport-requests.cancel', $transportRequest) }}" class="mt-3">
+                        @csrf
+                        <button class="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-rose-700">Cancel transport request</button>
+                    </form>
+                @endif
+            @endcan
+        </section>
+    @endif
+    @if (auth()->user()?->hasAnyRole(['nurse', 'registration', 'super-admin']) && auth()->user()->hasPermission('request-patient-transport') && auth()->user()->hasPermission('view-er'))
+        @if (! $transportRequest || in_array($transportRequest->status, ['COMPLETED', 'CANCELLED', 'FAILED'], true))
+            <section class="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 class="font-semibold text-slate-800">Request transport</h3>
+                <form method="POST" action="{{ route('emergency.transport-requests.store', $visit) }}" class="mt-3 space-y-3">
+                    @csrf
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <label class="text-sm">Pickup zone
+                            <select name="pickup_zone" required class="mt-1 w-full rounded border-slate-300">
+                                @foreach (config('integrations.zones') as $code => $label)
+                                    <option value="{{ $code }}" @selected($code === 'ER')>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm">Destination zone
+                            <select name="destination_zone" required class="mt-1 w-full rounded border-slate-300">
+                                @foreach (config('integrations.zones') as $code => $label)
+                                    <option value="{{ $code }}" @selected($code === 'WARD')>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </div>
+                    <div class="flex flex-wrap gap-4 text-sm">
+                        <label><input type="checkbox" name="needs[stretcher_required]" value="1"> Stretcher</label>
+                        <label><input type="checkbox" name="needs[oxygen_support]" value="1"> Oxygen support</label>
+                        <label><input type="checkbox" name="needs[wheelchair]" value="1"> Wheelchair</label>
+                    </div>
+                    <button class="rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white">Request transport</button>
+                </form>
+            </section>
+        @endif
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {{-- Visit details --}}
         <div class="bg-white rounded-xl border border-slate-200 p-6 {{ $isQueued ? 'lg:order-1' : 'lg:order-2' }}">

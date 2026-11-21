@@ -241,6 +241,7 @@ class EncounterService
             }
 
             $this->audit->completeEncounter($lockedEncounter->id);
+            app(RoundTwoIntegrationService::class)->enqueueCompletedEncounter($lockedEncounter);
 
             return $lockedEncounter->refresh();
         });

@@ -29,6 +29,7 @@ class PrescriptionService
 
             $this->queueDisplay->addPrescription($prescription);
             $this->audit->issuePrescription($prescription->id, $encounter->id);
+            app(RoundTwoIntegrationService::class)->enqueuePrescription($prescription);
 
             return $prescription;
         });

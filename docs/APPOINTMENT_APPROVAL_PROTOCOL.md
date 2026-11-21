@@ -15,4 +15,6 @@ The setting is read from the `APPOINTMENT_REQUIRES_APPROVAL` environment variabl
 
 ## External payer integrations
 
-No external Maxicare integration or payer-side approval protocol is implemented. Appointment approval in this application is the internal workflow described above.
+HICS letter-of-authorization status is tracked separately from the internal appointment decision. For an insured admission or outpatient care request with a coverage code and requested amount, HICS may return `PENDING`, `APPROVED`, `DENIED`, `EXPIRED`, or `CANCELLED`; only an HICS callback may change the external LOA state. An LOA result does not approve or reject an appointment, admission, or outpatient care request and does not change the existing human role allowed to make those decisions.
+
+The partner request contains opaque patient and admission/request references, coverage code, and requested amount. It is sent only after current privacy and HICS-sharing consent pass the integration disclosure gate. Callback authentication uses the partner API key plus a timestamped HMAC-SHA256 signature and event ID for replay protection. See [INTEGRATION_ARCHITECTURE.md](./INTEGRATION_ARCHITECTURE.md) for request/response shapes, status transitions, and rollout controls.

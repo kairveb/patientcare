@@ -14,6 +14,7 @@ use App\Models\TelehealthSession;
 use App\Models\TriageAssessment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Dompdf\Dompdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -49,6 +50,60 @@ class ReportExportService
         $value = (string) ($value ?? '');
 
         return preg_match('/^\s*[=+\-@]/u', $value) === 1 ? "'".$value : $value;
+    }
+
+    public function render(array $payload, string $format, string $title, array $filters): string
+    {
+        if ($format === 'csv' || $format === 'txt') {
+            $stream = fopen('php://temp', 'r+');
+            if (! is_resource($stream)) {
+                throw new \RuntimeException('Unable to allocate an export stream.');
+            }
+            $delimiter = $format === 'csv' ? ',' : "\t";
+            foreach ([$payload['headers'], ...$payload['rows']] as $row) {
+                if (fputcsv($stream, array_map($this->safeCsvCell(...), $row), $delimiter, '"', '\\') === false) {
+                    fclose($stream);
+                    throw new \RuntimeException('Unable to write the export stream.');
+                }
+            }
+            rewind($stream);
+            $content = stream_get_contents($stream);
+            fclose($stream);
+            if (! is_string($content)) {
+                throw new \RuntimeException('Unable to read the export stream.');
+            }
+
+            return $content;
+        }
+
+        if ($format === 'xls') {
+            $xmlRows = collect([$payload['headers'], ...$payload['rows']])->map(function (array $row): string {
+                $cells = collect($row)->map(fn (mixed $value): string => '<Cell><Data ss:Type="String">'
+                    .htmlspecialchars($this->safeCsvCell($value), ENT_XML1 | ENT_QUOTES, 'UTF-8')
+                    .'</Data></Cell>')->implode('');
+
+                return '<Row>'.$cells.'</Row>';
+            })->implode('');
+
+            return '<?xml version="1.0" encoding="UTF-8"?>'
+                .'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+                .'<Worksheet ss:Name="Report"><Table>'.$xmlRows.'</Table></Worksheet></Workbook>';
+        }
+
+        if ($format !== 'pdf') {
+            throw new \InvalidArgumentException('Unsupported report export format.');
+        }
+
+        $dompdf = new Dompdf(['isRemoteEnabled' => false]);
+        $dompdf->loadHtml(view('reports.export-pdf', [
+            'report' => $title,
+            'filters' => $filters,
+            ...$payload,
+        ])->render());
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        return $dompdf->output();
     }
 
     private function patients(array $filters): array

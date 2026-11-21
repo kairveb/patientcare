@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateUnknownErArrivalRequest;
 use App\Models\ErQueue;
 use App\Models\ErVisit;
+use App\Models\User;
+use App\Policies\ErVisitPolicy;
 use App\Services\PatientService;
 use App\Services\TriageService;
 use Illuminate\Http\JsonResponse;
@@ -56,7 +58,7 @@ class EmergencyApiController extends Controller
      */
     public function storeVisit(Request $request): JsonResponse
     {
-        abort_unless(Gate::allows('create-er-visits'), 403, 'You are not authorized.');
+        $this->authorizeErVisitCreation($request);
 
         $data = $request->validate([
             'patient_id' => ['nullable', 'required_without:reference_code', 'exists:patients,id'],
@@ -98,6 +100,7 @@ class EmergencyApiController extends Controller
 
     public function storeUnknownVisit(CreateUnknownErArrivalRequest $request): JsonResponse
     {
+        $this->authorizeErVisitCreation($request);
         $visit = $this->triageService->registerUnknownErVisit($request->validated());
 
         return response()->json([
@@ -148,5 +151,11 @@ class EmergencyApiController extends Controller
             'message' => 'ER visit retrieved successfully.',
             'data' => $visit,
         ]);
+    }
+
+    private function authorizeErVisitCreation(Request $request): void
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User && app(ErVisitPolicy::class)->create($user), 403);
     }
 }

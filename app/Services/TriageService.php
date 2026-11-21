@@ -494,6 +494,7 @@ class TriageService
             $this->markVisitInTreatment($visit);
         } elseif ($status === ErQueue::STATUS_DONE) {
             $visit->update(['status' => ErVisit::STATUS_DISCHARGED]);
+            app(RoundTwoIntegrationService::class)->enqueueErDischarge($visit->fresh());
         }
 
         return $queue;

@@ -248,13 +248,18 @@ Verification links are generated with the production `APP_URL` root and forced t
 
 After changing production environment values, clear and rebuild Laravel's cached configuration with `php artisan config:clear` followed by `php artisan config:cache`.
 
-For a fresh deployment, run the following from the project root in order. `DatabaseSeeder` is the current production-safe seeder: it installs reference and RBAC data but skips demo records when `APP_ENV=production`. `hims:preflight` queries migration state and therefore must run after migrations. `slots:generate` should run after provider schedules have been configured. Configure the bootstrap admin variables in the host environment before running the bootstrap command; remove the password variable after the account is created.
+For a fresh deployment, run the following from the project root in order. Do not run plain `php artisan db:seed` or `DatabaseSeeder` in production; invoke only the listed seeder classes. `hims:preflight` queries migration state and therefore must run after migrations. `slots:generate` should run after provider schedules have been configured. Configure the bootstrap admin variables in the host environment before running the bootstrap command; remove the password variable after the account is created.
 
 ```bash
 composer install --no-dev --optimize-autoloader --no-interaction
 php artisan key:generate
 php artisan migrate --force
-php artisan db:seed --force
+php artisan db:seed --class="Database\Seeders\ReferenceDataSeeder" --force
+php artisan db:seed --class="Database\Seeders\RbacReconciliationSeeder" --force
+php artisan db:seed --class="Database\Seeders\AdminRoleSeeder" --force
+php artisan db:seed --class="Database\Seeders\CareRequestRbacSeeder" --force
+php artisan db:seed --class="Database\Seeders\IntegrationPartnerSeeder" --force
+php artisan db:seed --class="Database\Seeders\IntegrationRbacSeeder" --force
 php artisan app:bootstrap-admin
 php artisan storage:link
 php artisan config:cache
@@ -300,7 +305,7 @@ php artisan db:seed
 php artisan app:seed-demo
 ```
 
-For local development, `php artisan db:seed` runs `DatabaseSeeder`, which installs reference data and seeds local demo data outside production. `app:seed-demo` creates marked synthetic records and four accounts without a Super Admin. Set `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD` through the deployment secret facility to supply account passwords; otherwise generated passwords are shown once by the command and must be saved. It never resets an existing account password. `DemoDataSeeder` and `HimsSeeder` are compatibility paths for tests and isolated local/E2E environments only; do not use them in production. The ordinary `php artisan db:seed --force` command uses `DatabaseSeeder`, which is production-safe and skips demo seeders when `APP_ENV=production`.
+For local development only, `php artisan db:seed` runs `DatabaseSeeder`. Production releases must run the explicit seeder classes listed above and must not run plain `php artisan db:seed`. `app:seed-demo` creates marked synthetic records and four accounts without a Super Admin. Set `DEMO_REGISTRATION_PASSWORD`, `DEMO_DOCTOR_PASSWORD`, `DEMO_NURSE_PASSWORD`, and `DEMO_PATIENT_PASSWORD` through the deployment secret facility to supply account passwords; otherwise generated passwords are shown once by the command and must be saved. It never resets an existing account password. `DemoDataSeeder` and `HimsSeeder` are compatibility paths for tests and isolated local/E2E environments only; do not use them in production.
 
 The E2E browser tests still depend on the legacy `@coor.test` accounts and workflow examples. Use those only in a disposable, isolated E2E database; do not expose their shared demo credentials to real users.
 

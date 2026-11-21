@@ -36,6 +36,8 @@ class EmergencyAndTelehealthUiTest extends TestCase
         ]);
         $role = Role::firstOrCreate(['name' => 'super-admin'], ['label' => 'Super Admin']);
         $user->roles()->syncWithoutDetaching([$role->id]);
+        $permission = Permission::firstOrCreate(['name' => 'create-er-visits'], ['label' => 'Create ER Visits']);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
 
         $response = $this->actingAs($user, 'web')->get('/emergency');
 

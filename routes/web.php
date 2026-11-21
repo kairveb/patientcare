@@ -3,6 +3,8 @@
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AppointmentReassignmentController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\IntegrationAdminController;
+use App\Http\Controllers\IntegrationExportController;
 use App\Http\Controllers\ArrivalCheckInController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BillingStatementController;
@@ -38,6 +40,7 @@ use App\Http\Controllers\TelehealthIntakeController;
 use App\Http\Controllers\TelehealthReferralController;
 use App\Http\Controllers\TriageAssessmentController;
 use App\Http\Controllers\TriageReassessmentController;
+use App\Http\Controllers\TransportRequestController;
 use App\Http\Middleware\TrackInactivity;
 use App\Http\Middleware\EnsureActiveUser;
 use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
@@ -107,6 +110,10 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
             ->middleware('throttle:20,1')->name('privacy.requests.review');
     });
 
+    Route::middleware(['role:admin,super-admin', 'can:viewAny,App\Models\IntegrationPartner'])
+        ->get('admin/integrations', [IntegrationAdminController::class, 'index'])
+        ->name('admin.integrations.index');
+
     Route::middleware('role:patient')->group(function () {
         Route::get('patient-portal/reassignments', [AppointmentReassignmentController::class, 'patientIndex'])->name('patient.reassignments.index');
         Route::get('patient-portal/reassignments/{reassignment}', [AppointmentReassignmentController::class, 'patientShow'])->name('patient.reassignments.show');
@@ -115,7 +122,7 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
             ->name('patient.reassignments.respond');
     });
 
-    Route::middleware('role:doctor,nurse,registration,admin,super-admin')->group(function () {
+    Route::middleware('role:doctor,registration,admin,super-admin')->group(function () {
         Route::get('provider-unavailabilities/create', [AppointmentReassignmentController::class, 'unavailabilityForm'])
             ->name('provider-unavailabilities.create');
         Route::post('provider-unavailabilities', [AppointmentReassignmentController::class, 'storeUnavailability'])
@@ -280,14 +287,18 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
     // Emergency / ER
     Route::middleware(['can:view-er', 'role:nurse,doctor,super-admin,registration'])->group(function () {
         Route::get('emergency', [EmergencyController::class, 'index'])->name('emergency.index');
-        Route::get('emergency/create', [EmergencyController::class, 'create'])->name('emergency.create');
+        Route::get('emergency/create', [EmergencyController::class, 'create'])
+            ->middleware(['can:create,App\Models\ErVisit', 'role:nurse,registration,super-admin'])
+            ->name('emergency.create');
         Route::post('emergency', [EmergencyController::class, 'store'])
-            ->middleware('throttle:patient-reference-workflow')
+            ->middleware(['can:create,App\Models\ErVisit', 'role:nurse,registration,super-admin', 'throttle:patient-reference-workflow'])
             ->name('emergency.store');
         Route::post('emergency/unknown-arrivals', [EmergencyController::class, 'storeUnknownArrival'])
-            ->middleware(['can:create-er-visits', 'role:registration,nurse'])
+            ->middleware(['can:create,App\Models\ErVisit', 'role:registration,nurse,super-admin'])
             ->name('emergency.unknown-arrivals.store');
-        Route::get('emergency/{visit}', [EmergencyController::class, 'show'])->name('emergency.show');
+        Route::post('emergency/{visit}/transport-requests', [TransportRequestController::class, 'storeForEr'])
+            ->middleware(['can:create,App\Models\TransportRequest', 'role:nurse,registration,super-admin', 'throttle:30,1'])
+            ->name('emergency.transport-requests.store');
         Route::post('emergency/{visit}/triage', [EmergencyController::class, 'triage'])->middleware('role:nurse,doctor')->name('emergency.triage');
         Route::post('emergency/{visit}/reassessments', [TriageReassessmentController::class, 'store'])
             ->middleware(['can:triage-patients', 'role:nurse'])
@@ -302,7 +313,6 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
         Route::get('emergency/check-in/{token}', [ArrivalCheckInController::class, 'show'])->name('emergency.checkin.show');
         Route::post('emergency/check-in/confirm', [ArrivalCheckInController::class, 'confirm'])->name('emergency.checkin.confirm');
     });
-
     Route::middleware(['can:create-admissions', 'role:doctor,super-admin'])->group(function () {
         Route::get('emergency/{visit}/admission/create', [InpatientController::class, 'createFromErVisit'])->name('emergency.admission.create');
         Route::post('emergency/{visit}/admission', [InpatientController::class, 'storeFromErVisit'])->name('emergency.admission.store');
@@ -311,9 +321,16 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
     Route::middleware(['can:triage-patients', 'role:nurse,doctor,super-admin'])->group(function () {
         Route::get('triage', [TriageAssessmentController::class, 'create'])->name('triage.dashboard');
         Route::get('triage/create', [TriageAssessmentController::class, 'create'])->name('triage.create');
-        Route::post('triage', [TriageAssessmentController::class, 'store'])->middleware('role:nurse,doctor,super-admin')->name('triage.store');
-        Route::get('triage/{triageAssessment}/er-intake', [EmergencyController::class, 'createFromTriage'])->name('triage.er-intake');
+        Route::post('triage', [TriageAssessmentController::class, 'store'])
+            ->middleware(['can:create,App\Models\ErVisit', 'role:nurse,super-admin'])
+            ->name('triage.store');
+        Route::get('triage/{triageAssessment}/er-intake', [EmergencyController::class, 'createFromTriage'])
+            ->middleware(['can:create,App\Models\ErVisit', 'role:nurse,registration,super-admin'])
+            ->name('triage.er-intake');
     });
+    Route::get('emergency/{visit}', [EmergencyController::class, 'show'])
+        ->middleware(['can:view-er', 'role:nurse,doctor,super-admin,registration'])
+        ->name('emergency.show');
 
     Route::middleware(['can:view-opd-queue', 'role:doctor,registration,nurse,super-admin'])->group(function () {
         Route::get('doctors/queue', [DoctorQueueController::class, 'index'])->name('doctors.queue');
@@ -332,9 +349,18 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
         Route::get('admissions', [InpatientController::class, 'admissions'])->name('admissions.index');
         Route::get('admissions/{admission}', [InpatientController::class, 'showAdmission'])->name('admissions.show');
     });
+    Route::post('admissions/{admission}/transport-requests', [TransportRequestController::class, 'storeForAdmission'])
+        ->middleware(['can:create,App\Models\TransportRequest', 'role:nurse,registration,super-admin', 'throttle:30,1'])
+        ->name('admissions.transport-requests.store');
+    Route::post('transport-requests/{transportRequest}/cancel', [TransportRequestController::class, 'cancelWeb'])
+        ->middleware(['can:cancel,transportRequest', 'role:nurse,registration,super-admin', 'throttle:30,1'])
+        ->name('transport-requests.cancel');
     Route::post('admissions/{admission}/billing-clearance-request', [InpatientController::class, 'requestBillingClearance'])
         ->middleware(['can:view-admissions', 'role:nurse,registration'])
         ->name('admissions.billing-clearance.request');
+    Route::post('admissions/{admission}/billing-clearance/decision', [InpatientController::class, 'decideBillingClearance'])
+        ->middleware(['can:manage-billing', 'role:super-admin'])
+        ->name('admissions.billing-clearance.decision');
     Route::middleware(['can:create-admissions', 'role:doctor,super-admin'])->group(function () {
         Route::get('admissions/create', [InpatientController::class, 'createAdmission'])->name('admissions.create');
         Route::post('admissions', [InpatientController::class, 'storeAdmission'])->name('admissions.store');
@@ -384,6 +410,9 @@ Route::middleware(['auth', EnsureActiveUser::class, 'verified', EnsureCurrentPri
     // Reports
     Route::middleware(['can:view-reports', 'role:nurse,registration,admin,super-admin'])->group(function () {
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::post('reports/hads-exports', [IntegrationExportController::class, 'store'])
+            ->middleware(['report.password.confirm', 'throttle:10,1'])
+            ->name('reports.hads-exports.store');
         Route::get('reports/patients', [ReportController::class, 'patients'])->name('reports.patients');
         Route::get('reports/appointments', [ReportController::class, 'appointments'])->name('reports.appointments');
         Route::get('reports/encounters', [ReportController::class, 'encounters'])->name('reports.encounters');

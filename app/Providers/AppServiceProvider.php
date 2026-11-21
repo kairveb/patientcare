@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Contracts\Icd10CodeValidator;
 use App\Models\Permission;
+use App\Models\IntegrationPartner;
+use App\Models\IntegrationOutbox;
+use App\Models\TransportRequest;
 use App\Models\CareRequest;
 use App\Models\AppointmentReassignment;
 use App\Models\ProviderUnavailability;
@@ -16,6 +19,8 @@ use App\Policies\ProviderUnavailabilityPolicy;
 use App\Policies\TelehealthSessionPolicy;
 use App\Policies\ProviderPolicy;
 use App\Policies\DataSubjectRequestPolicy;
+use App\Policies\IntegrationAdminPolicy;
+use App\Policies\TransportRequestPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
@@ -48,6 +53,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Provider::class, ProviderPolicy::class);
         Gate::policy(DataSubjectRequest::class, DataSubjectRequestPolicy::class);
         Gate::policy(TelehealthSession::class, TelehealthSessionPolicy::class);
+        Gate::policy(IntegrationPartner::class, IntegrationAdminPolicy::class);
+        Gate::policy(IntegrationOutbox::class, IntegrationAdminPolicy::class);
+        Gate::policy(TransportRequest::class, TransportRequestPolicy::class);
         View::composer(['reports.index', 'reports._date-form'], function ($view): void {
             $view->with([
                 'reportDepartments' => Department::query()->orderBy('name')->get(['id', 'name']),

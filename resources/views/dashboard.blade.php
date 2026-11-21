@@ -600,6 +600,44 @@
                 <div class="mt-1 text-sm text-slate-600">Checked in today</div>
             </a>
         </div>
+    @elseif ($userRole === 'admin')
+        <section class="panel-card p-6 lg:p-8">
+            <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.3em] text-teal-600">Administration</p>
+                    <h2 class="mt-2 text-2xl font-semibold text-slate-900">Operational dashboard</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Access scheduling, provider coverage, reports, and account administration.</p>
+                </div>
+                <div class="metric-pill">Admin workspace</div>
+            </div>
+        </section>
+
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <a href="{{ route('appointments.index') }}" class="panel-card p-5">
+                <div class="text-3xl font-semibold text-slate-900">{{ $adminAppointmentCount }}</div>
+                <div class="mt-1 text-sm text-slate-600">Appointments</div>
+            </a>
+            <a href="{{ route('appointment-reassignments.index') }}" class="panel-card p-5">
+                <div class="text-3xl font-semibold text-slate-900">{{ $openReassignmentCount ?? 0 }}</div>
+                <div class="mt-1 text-sm text-slate-600">Provider coverage cases</div>
+            </a>
+            <a href="{{ route('reports.index') }}" class="panel-card p-5">
+                <div class="text-lg font-semibold text-slate-900">Operational reports</div>
+                <div class="mt-1 text-sm text-slate-600">View reports</div>
+            </a>
+            @can('manage-users')
+                <a href="{{ route('admin.users.index') }}" class="panel-card p-5">
+                    <div class="text-lg font-semibold text-slate-900">User management</div>
+                    <div class="mt-1 text-sm text-slate-600">Manage accounts and access</div>
+                </a>
+            @endcan
+            @can('view-integration-logs')
+                <a href="{{ route('admin.integrations.index') }}" class="panel-card p-5">
+                    <div class="text-lg font-semibold text-slate-900">Integration deliveries</div>
+                    <div class="mt-1 text-sm text-slate-600">Read-only delivery status</div>
+                </a>
+            @endcan
+        </div>
     @else
         <section class="panel-card border-l-4 border-slate-300 p-6 lg:p-8">
             <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">

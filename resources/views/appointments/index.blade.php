@@ -24,7 +24,7 @@
                 @if (request()->hasAny(['q', 'date', 'status', 'follow_up']))
                     <a href="{{ route('appointments.index') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Clear filters</a>
                 @endif
-                @role('registration', 'super-admin')
+                @role('registration', 'nurse', 'super-admin')
                     @if (auth()->user()->hasRole('registration', 'super-admin'))
                         <a href="{{ route('symptom-checker.create') }}" class="rounded-2xl border border-teal-600 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">AI symptom checker</a>
                     @endif
@@ -591,7 +591,7 @@
     });
 </script>
 
-@role('registration', 'super-admin')
+@role('registration', 'nurse', 'super-admin')
     <div class="modal fade" id="appointmentModal" tabindex="-1" aria-labelledby="appointmentModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 bg-white shadow-2xl">

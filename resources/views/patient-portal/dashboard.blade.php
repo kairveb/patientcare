@@ -158,6 +158,10 @@
                             <p class="mt-1 text-sm text-slate-600">{{ $prescription->dosage }}</p>
                             <p class="mt-2 text-sm text-slate-700">{{ $prescription->instructions }}</p>
                             <p class="mt-2 text-xs text-slate-500">Prescribed {{ $prescription->prescribed_at?->format('M d, Y g:i A') ?? 'recently' }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Dispensing: {{ $prescription->dispensed_at?->format('M d, Y g:i A') ?? 'Not dispensed' }}</p>
+                            @if ($prescription->partner_status)
+                                <p class="mt-1 text-xs text-slate-500">PMS: {{ $prescription->partner_status }}</p>
+                            @endif
                         </div>
                     @endforeach
                 </div>

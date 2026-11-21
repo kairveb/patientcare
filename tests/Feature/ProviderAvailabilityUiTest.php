@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\EnsureCurrentPrivacyAcceptance;
 use App\Models\AppointmentSlot;
+use App\Models\Role;
 use App\Models\Provider;
 use App\Models\User;
 use Database\Seeders\DemoProvidersAndSlotsSeeder;
@@ -91,5 +92,48 @@ class ProviderAvailabilityUiTest extends TestCase
             ->assertOk()
             ->assertSee('Missing bio')
             ->assertSee($provider->full_name);
+    }
+
+    public function test_provider_unavailability_access_excludes_nurse_on_web_and_api(): void
+    {
+        $provider = Provider::query()->where('active', true)->firstOrFail();
+        $admin = User::factory()->create(['email' => 'availability-admin@example.test']);
+        $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail());
+
+        foreach ([
+            'patient' => false,
+            'doctor' => true,
+            'nurse' => false,
+            'registration' => true,
+            'admin' => true,
+            'super-admin' => true,
+        ] as $roleName => $allowed) {
+            $user = $roleName === 'admin'
+                ? $admin
+                : User::query()->whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            if ($roleName === 'patient') {
+                $this->acceptRequiredPrivacyDocuments($user->patient, $user);
+            }
+
+            $payload = [
+                'provider_id' => $roleName === 'doctor' ? $user->provider->id : $provider->id,
+                'starts_at' => now()->addDay()->toDateTimeString(),
+                'ends_at' => now()->addDay()->addHour()->toDateTimeString(),
+                'reason' => \App\Models\ProviderUnavailability::REASON_SICK_LEAVE,
+            ];
+            $this->actingAs($user, 'web')->get(route('provider-unavailabilities.create'))
+                ->assertStatus($allowed ? 200 : 403);
+            $this->actingAs($user, 'web')->post(route('provider-unavailabilities.store'), $payload)
+                ->assertStatus($allowed ? 302 : 403);
+            $this->actingAs($user, 'sanctum')->postJson('/api/v1/provider-unavailabilities', $payload)
+                ->assertStatus($allowed ? 201 : 403);
+
+            $dashboard = $this->actingAs($user, 'web')->get('/dashboard')->assertOk();
+            if ($roleName === 'doctor') {
+                $this->assertSame(1, substr_count($dashboard->getContent(), 'Report unavailability'));
+            } else {
+                $dashboard->assertDontSee('Report unavailability');
+            }
+        }
     }
 }

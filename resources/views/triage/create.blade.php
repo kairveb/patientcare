@@ -18,6 +18,7 @@
         </div>
     </div>
 
+    @if ($canCreateErVisit)
     <form method="POST" action="{{ route('triage.store') }}" class="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         @csrf
 
@@ -132,6 +133,12 @@
             </div>
         </aside>
     </form>
+    @else
+        <div class="rounded-xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-900">
+            Select an existing ER visit from the queue to review or update its triage assessment.
+            <a href="{{ route('emergency.index') }}" class="ml-1 font-semibold underline">Open the ER queue</a>
+        </div>
+    @endif
 </div>
 
 <div id="override-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 p-4">

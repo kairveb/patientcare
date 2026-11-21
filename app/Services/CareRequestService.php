@@ -38,8 +38,18 @@ class CareRequestService
                 'type' => $data['type'],
                 'description' => trim($data['description']),
                 'urgency' => $data['urgency'],
+                'coverage_code' => $data['coverage_code'] ?? null,
+                'loa_requested_amount' => $data['loa_requested_amount'] ?? null,
+                'loa_status' => filled($data['coverage_code'] ?? null) ? 'PENDING' : null,
                 'status' => CareRequest::STATUS_REQUESTED,
             ]);
+
+            if (filled($careRequest->coverage_code) && $careRequest->loa_requested_amount !== null) {
+                app(IntegrationOutboxService::class)->enqueue('hics', 'care_request_loa', $careRequest->id, [
+                    'purpose' => 'hics_loa_care_request',
+                    'version' => hash('sha256', $careRequest->coverage_code.'|'.$careRequest->loa_requested_amount),
+                ]);
+            }
 
             $this->recordHistory($careRequest, null, CareRequest::STATUS_REQUESTED, $doctor, 'Request created.');
             $this->audit->log('CREATE_CARE_REQUEST', 'care_request', $careRequest->id, 'SUCCESS', [
@@ -85,6 +95,9 @@ class CareRequestService
                 'remarks' => filled($remarks) ? trim($remarks) : null,
             ]);
             $locked->refresh();
+            if ($decision === CareRequest::STATUS_APPROVED) {
+                app(RoundTwoIntegrationService::class)->enqueueApprovedCareRequest($locked);
+            }
             $this->recordHistory($locked, $fromStatus, $decision, $approver, $remarks);
             $this->notifyDecision($locked);
             $this->audit->log('DECIDE_CARE_REQUEST', 'care_request', $locked->id, 'SUCCESS', [

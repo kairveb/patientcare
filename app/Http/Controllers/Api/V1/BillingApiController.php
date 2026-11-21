@@ -7,6 +7,7 @@ use App\Models\Admission;
 use App\Models\Encounter;
 use App\Models\EncounterBill;
 use App\Services\BillingAggregationService;
+use App\Services\BillingClearanceRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -34,12 +35,31 @@ class BillingApiController extends Controller
     public function admissionPaymentStatus(Admission $admission): JsonResponse
     {
         Gate::authorize('view-payment-status');
-        $bill = $admission->bills()->latest('generated_at')->first(['status']);
+        $bill = $admission->bills()->latest('generated_at')->first(['status', 'integration_status']);
+        $clearance = $admission->billingClearanceRequests()->latest()->first(['status', 'integration_status']);
 
         return response()->json([
             'success' => true,
-            'data' => ['status' => $bill?->status],
+            'data' => [
+                'status' => $bill?->status,
+                'partner_status' => $bill?->integration_status,
+                'clearance_status' => $clearance?->status,
+                'clearance_partner_status' => $clearance?->integration_status,
+            ],
         ]);
+    }
+
+    public function decideClearance(
+        Request $request,
+        Admission $admission,
+        BillingClearanceRequestService $clearances
+    ): JsonResponse {
+        Gate::authorize('manage-billing');
+        $data = $request->validate(['decision' => ['required', 'in:CLEARED,REJECTED']]);
+        $clearance = $admission->billingClearanceRequests()->latest()->firstOrFail();
+        $clearance = $clearances->decide($clearance, $request->user(), $data['decision']);
+
+        return response()->json(['success' => true, 'data' => ['status' => $clearance->status]]);
     }
 
     public function generateEncounter(Request $request, Encounter $encounter): JsonResponse

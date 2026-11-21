@@ -214,7 +214,10 @@ class BillingAndDischargeWorkflowTest extends TestCase
         $this->actingAs($doctor)
             ->getJson("/api/v1/admissions/{$admission->id}/payment-status")
             ->assertOk()
-            ->assertExactJson(['success' => true, 'data' => ['status' => EncounterBill::STATUS_PAID]]);
+            ->assertJsonPath('data.status', EncounterBill::STATUS_PAID)
+            ->assertJsonPath('data.partner_status', null)
+            ->assertJsonPath('data.clearance_status', null)
+            ->assertJsonPath('data.clearance_partner_status', null);
 
         $encounter = $this->createEncounter($patient, $doctor);
         $this->actingAs($doctor)

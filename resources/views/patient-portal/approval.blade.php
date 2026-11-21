@@ -18,6 +18,9 @@
         <div><dt class="text-slate-500">Urgency</dt><dd class="font-medium">{{ ucfirst($careRequest->urgency) }}</dd></div>
         <div><dt class="text-slate-500">Requested by</dt><dd class="font-medium">{{ $careRequest->requestedBy->name }}</dd></div>
         <div><dt class="text-slate-500">Request date</dt><dd class="font-medium">{{ $careRequest->created_at->format('M d, Y g:i A') }}</dd></div>
+        @if ($careRequest->external_partner_code)
+            <div><dt class="text-slate-500">{{ strtoupper($careRequest->external_partner_code) }} status</dt><dd class="font-medium">{{ $careRequest->partner_status ?? 'REQUESTED' }}</dd></div>
+        @endif
         @if ($careRequest->decided_at)
             <div><dt class="text-slate-500">Decision date</dt><dd class="font-medium">{{ $careRequest->decided_at->format('M d, Y g:i A') }}</dd></div>
             <div><dt class="text-slate-500">Approver</dt><dd class="font-medium">{{ $careRequest->decidedBy->name ?? '—' }}</dd></div>
@@ -31,6 +34,9 @@
         <div class="mt-6 border-t border-slate-100 pt-5">
             <h3 class="font-semibold text-slate-900">Result</h3>
             <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ $careRequest->result_text }}</p>
+            @if ($careRequest->result_reference)
+                <p class="mt-2 text-sm text-slate-600">Partner result reference: {{ $careRequest->result_reference }}</p>
+            @endif
             @if ($careRequest->clinicalDocument)
                 <a href="{{ route('care-requests.result-file', $careRequest) }}" class="mt-2 inline-block text-sm font-semibold text-teal-700 hover:underline">Download result file</a>
             @endif

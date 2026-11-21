@@ -135,7 +135,11 @@ class TriageAiEvaluationHookTest extends TestCase
             ['name' => 'triage-patients'],
             ['label' => 'Triage Patients']
         );
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $createErPermission = \App\Models\Permission::firstOrCreate(
+            ['name' => 'create-er-visits'],
+            ['label' => 'Create ER Visits']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id, $createErPermission->id]);
         $nurse->roles()->syncWithoutDetaching([$role->id]);
         $this->actingAs($nurse);
 
@@ -185,7 +189,11 @@ class TriageAiEvaluationHookTest extends TestCase
             ['name' => 'triage-patients'],
             ['label' => 'Triage Patients']
         );
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $createErPermission = \App\Models\Permission::firstOrCreate(
+            ['name' => 'create-er-visits'],
+            ['label' => 'Create ER Visits']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id, $createErPermission->id]);
         $nurse->roles()->syncWithoutDetaching([$role->id]);
         $this->actingAs($nurse);
 

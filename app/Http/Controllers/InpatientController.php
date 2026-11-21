@@ -14,6 +14,7 @@ use App\Models\EncounterBill;
 use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\Provider;
+use App\Models\TransportRequest;
 use App\Models\Ward;
 use App\Services\AdmissionService;
 use App\Services\BedManagementService;
@@ -149,8 +150,13 @@ class InpatientController extends Controller
         }
         $dischargeBlockReason = null;
         $canDischarge = $this->isDischargeReady($admission, $billing, $dischargeBlockReason);
+        $transportRequest = TransportRequest::query()
+            ->where('source_type', 'admission')
+            ->where('source_id', $admission->id)
+            ->latest()
+            ->first();
 
-        return view('inpatient.show-admission', compact('admission', 'availableBeds', 'assignableBeds', 'wards', 'selectedWardId', 'billingSummary', 'billingError', 'paymentStatus', 'canDischarge', 'dischargeBlockReason'));
+        return view('inpatient.show-admission', compact('admission', 'availableBeds', 'assignableBeds', 'wards', 'selectedWardId', 'billingSummary', 'billingError', 'paymentStatus', 'canDischarge', 'dischargeBlockReason', 'transportRequest'));
     }
 
     public function updateGuaranteeDetails(UpdateAdmissionGuaranteeRequest $request, Admission $admission)
@@ -168,6 +174,16 @@ class InpatientController extends Controller
         $clearances->request($admission, $request->user());
 
         return back()->with('success', 'Billing clearance request recorded.');
+    }
+
+    public function decideBillingClearance(Request $request, Admission $admission, BillingClearanceRequestService $clearances)
+    {
+        abort_unless($request->user()->hasRole('super-admin') && $request->user()->hasPermission('manage-billing'), 403);
+        $data = $request->validate(['decision' => ['required', 'in:CLEARED,REJECTED']]);
+        $clearance = $admission->billingClearanceRequests()->latest()->firstOrFail();
+        $clearances->decide($clearance, $request->user(), $data['decision']);
+
+        return back()->with('success', 'Billing clearance decision saved.');
     }
 
     public function approveAdmission(Admission $admission)

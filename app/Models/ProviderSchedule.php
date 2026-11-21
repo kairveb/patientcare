@@ -9,6 +9,8 @@ class ProviderSchedule extends Model
 {
     protected $guarded = [];
 
+    protected $hidden = ['integration_partner_id'];
+
     protected $casts = ['day_of_week' => 'integer', 'slot_duration' => 'integer', 'unavailable_date' => 'date:Y-m-d'];
 
     public function provider(): BelongsTo

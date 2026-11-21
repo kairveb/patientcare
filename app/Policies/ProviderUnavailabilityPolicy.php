@@ -12,7 +12,7 @@ class ProviderUnavailabilityPolicy
             return (int) $user->provider?->id === $providerId;
         }
 
-        return $user->hasAnyRole(['admin', 'nurse', 'registration', 'super-admin'])
+        return $user->hasAnyRole(['admin', 'registration', 'super-admin'])
             && ($user->isSuperAdmin()
                 || $user->hasRole('registration')
                 || $user->hasPermission('manage-provider-schedules'));

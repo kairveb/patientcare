@@ -25,6 +25,17 @@
             <div><dt class="text-slate-500">Request date</dt><dd class="font-medium">{{ $careRequest->created_at->format('M d, Y g:i A') }}</dd></div>
             <div><dt class="text-slate-500">Requested by</dt><dd class="font-medium">{{ $careRequest->requestedBy->name }}</dd></div>
             <div><dt class="text-slate-500">Approval reference</dt><dd class="font-medium">{{ $careRequest->approval_reference ?? 'Not issued' }}</dd></div>
+            @if ($careRequest->external_partner_code)
+                <div><dt class="text-slate-500">{{ strtoupper($careRequest->external_partner_code) }} status</dt><dd class="font-medium">{{ $careRequest->partner_status ?? 'REQUESTED' }} · {{ $careRequest->partner_status_updated_at?->format('M d, Y g:i A') ?? '—' }}</dd></div>
+                @if ($careRequest->accession_reference)
+                    <div><dt class="text-slate-500">Accession / order reference</dt><dd class="font-medium">{{ $careRequest->accession_reference }}</dd></div>
+                @endif
+            @endif
+            @if ($careRequest->coverage_code)
+                <div><dt class="text-slate-500">LOA status</dt><dd class="font-medium">{{ $careRequest->loa_status ?? 'PENDING' }}</dd></div>
+                <div><dt class="text-slate-500">LOA approved amount</dt><dd class="font-medium">{{ $careRequest->loa_approved_amount ?? '—' }}</dd></div>
+                <div><dt class="text-slate-500">Payer reference</dt><dd class="font-medium">{{ $careRequest->loa_payer_reference ?? '—' }}</dd></div>
+            @endif
             <div class="md:col-span-2"><dt class="text-slate-500">Requested service / clinical reason</dt><dd class="mt-1 whitespace-pre-line font-medium">{{ $careRequest->description }}</dd></div>
             @if ($careRequest->decided_at)
                 <div><dt class="text-slate-500">Decision date</dt><dd class="font-medium">{{ $careRequest->decided_at->format('M d, Y g:i A') }}</dd></div>
@@ -94,6 +105,9 @@
         <section class="rounded-xl border border-slate-200 bg-white p-6">
             <h3 class="font-semibold text-slate-900">Result</h3>
             <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ $careRequest->result_text }}</p>
+            @if ($careRequest->result_reference)
+                <p class="mt-2 text-sm text-slate-600">Partner result reference: {{ $careRequest->result_reference }}</p>
+            @endif
             @if ($careRequest->clinicalDocument)
                 <a href="{{ route('care-requests.result-file', $careRequest) }}" class="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">Download attached result file</a>
             @endif

@@ -62,6 +62,7 @@
                                     ['label' => 'User Management', 'route' => 'admin.users.index', 'permission' => 'manage-users', 'roles' => ['admin', 'super-admin'], 'active' => ['admin.users.*']],
                                     ['label' => 'Reports', 'route' => 'reports.index', 'permission' => 'view-reports', 'roles' => ['nurse', 'registration', 'admin', 'super-admin'], 'active' => ['reports.*']],
                                     ['label' => 'Audit Logs', 'route' => 'audit.index', 'permission' => 'view-audit-logs', 'roles' => ['super-admin'], 'active' => ['audit.*']],
+                                    ['label' => 'Integration deliveries', 'route' => 'admin.integrations.index', 'permission' => 'view-integration-logs', 'roles' => ['admin', 'super-admin'], 'active' => ['admin.integrations.*']],
                                 ],
                             ],
                             [
@@ -74,7 +75,6 @@
                                     ['label' => 'Appointment updates', 'route' => 'patient.reassignments.index', 'roles' => ['patient'], 'active' => ['patient.reassignments.*']],
                                     ['label' => 'Provider coverage', 'route' => 'appointment-reassignments.index', 'roles' => ['registration', 'admin', 'super-admin'], 'active' => ['appointment-reassignments.*']],
                                     ['label' => 'Report unavailability', 'route' => 'provider-unavailabilities.create', 'roles' => ['doctor'], 'active' => ['provider-unavailabilities.*']],
-                                    ['label' => 'Report unavailability', 'route' => 'provider-unavailabilities.create', 'permission' => 'manage-provider-schedules', 'roles' => ['nurse'], 'active' => ['provider-unavailabilities.*']],
                                 ],
                             ],
                             [

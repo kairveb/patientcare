@@ -13,6 +13,8 @@ class HimsSeeder extends Seeder
             RbacReconciliationSeeder::class,
             AdminRoleSeeder::class,
             CareRequestRbacSeeder::class,
+            IntegrationPartnerSeeder::class,
+            IntegrationRbacSeeder::class,
             DemoDataSeeder::class,
         ]);
     }

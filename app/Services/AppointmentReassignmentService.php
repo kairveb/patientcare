@@ -25,7 +25,7 @@ class AppointmentReassignmentService
     ) {
     }
 
-    public function markUnavailable(array $data, int $userId): ProviderUnavailability
+    public function markUnavailable(array $data, ?int $userId): ProviderUnavailability
     {
         [$unavailability, $cases] = DB::transaction(function () use ($data, $userId): array {
             $provider = Provider::query()->whereKey($data['provider_id'])->lockForUpdate()->firstOrFail();
@@ -359,7 +359,7 @@ class AppointmentReassignmentService
     private function addCaseToWaitlist(
         AppointmentReassignment $case,
         Appointment $appointment,
-        int $userId,
+        ?int $userId,
         ?string $remarks = null
     ): void {
         DB::transaction(function () use ($case, $appointment, $userId, $remarks): void {
@@ -439,7 +439,7 @@ class AppointmentReassignmentService
             || (int) $slot->appointment_type_id === (int) $appointmentType->id;
     }
 
-    private function notifyParticipants(AppointmentReassignment $case, int $actorId): void
+    private function notifyParticipants(AppointmentReassignment $case, ?int $actorId): void
     {
         $case->loadMissing(['appointment.patient.user', 'suggestedProvider.user']);
         $appointment = $case->appointment;

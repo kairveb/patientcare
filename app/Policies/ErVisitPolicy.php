@@ -7,6 +7,12 @@ use App\Models\User;
 
 class ErVisitPolicy
 {
+    public function create(User $user): bool
+    {
+        return $user->hasAnyRole(['nurse', 'registration', 'super-admin'])
+            && $user->hasPermission('create-er-visits');
+    }
+
     public function viewAny(User $user): bool
     {
         return $user->hasAnyRole(['super-admin', 'nurse', 'doctor']);
@@ -16,11 +22,6 @@ class ErVisitPolicy
     {
         return ($user->hasRole('registration') && $user->hasPermission('view-er'))
             || $this->viewAny($user);
-    }
-
-    public function create(User $user): bool
-    {
-        return $user->hasAnyRole(['super-admin', 'nurse']);
     }
 
     public function triage(User $user, ErVisit $visit): bool

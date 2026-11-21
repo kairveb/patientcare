@@ -106,6 +106,8 @@ class BillingAggregationService
             $prescription->update([
                 'dispensed_at' => now(),
                 'dispensed_by' => $actor->id,
+                'partner_status' => 'DISPENSED',
+                'partner_status_updated_at' => now(),
             ]);
 
             return $prescription->fresh();
@@ -275,6 +277,11 @@ class BillingAggregationService
             foreach ($preview['items'] as $item) {
                 $bill->items()->create($item);
             }
+
+            app(IntegrationOutboxService::class)->enqueue('bdms', 'billing_statement', $bill->id, [
+                'purpose' => 'billing_statement',
+                'version' => $bill->source_fingerprint,
+            ]);
 
             return $bill->fresh('items');
         });

@@ -7,6 +7,7 @@ use App\Models\Appointment;
 use App\Models\Bed;
 use App\Models\Encounter;
 use App\Models\ErVisit;
+use App\Models\IntegrationExport;
 use App\Models\Patient;
 use App\Models\TelehealthSession;
 use App\Models\TriageAssessment;
@@ -20,7 +21,13 @@ class ReportController extends Controller
 {
     public function index()
     {
-        return view('reports.index');
+        return view('reports.index', [
+            'hadsExports' => IntegrationExport::query()
+                ->whereHas('partner', fn ($query) => $query->where('code', 'hads'))
+                ->latest()
+                ->limit(10)
+                ->get(),
+        ]);
     }
 
     public function patients(Request $request)

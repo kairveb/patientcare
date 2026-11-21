@@ -76,6 +76,8 @@ class AdmissionService
                 'guarantor_relationship' => $data['guarantor_relationship'] ?? null,
                 'guarantor_contact' => $data['guarantor_contact'] ?? null,
                 'loa_reference' => $data['loa_reference'] ?? null,
+                'coverage_code' => $data['coverage_code'] ?? null,
+                'loa_requested_amount' => $data['loa_requested_amount'] ?? null,
             ]);
 
             $visit->update(['status' => ErVisit::STATUS_ADMITTED]);
@@ -127,7 +129,7 @@ class AdmissionService
 
     protected function createAdmissionRecord(array $data): Admission
     {
-        return Admission::create([
+        $admission = Admission::create([
             'admission_number' => $this->generateNumber(),
             'patient_id' => $data['patient_id'],
             'er_visit_id' => $data['er_visit_id'] ?? null,
@@ -139,15 +141,37 @@ class AdmissionService
             'guarantor_relationship' => $data['guarantor_relationship'] ?? null,
             'guarantor_contact' => $data['guarantor_contact'] ?? null,
             'loa_reference' => $data['loa_reference'] ?? null,
+            'coverage_code' => $data['coverage_code'] ?? null,
+            'loa_requested_amount' => $data['loa_requested_amount'] ?? null,
+            'loa_status' => filled($data['coverage_code'] ?? null) ? 'PENDING' : null,
             'created_by' => auth()->id(),
         ]);
+        if (filled($admission->coverage_code) && $admission->loa_requested_amount !== null) {
+            $this->queueLoaRequest($admission);
+        }
+
+        return $admission;
     }
 
     public function updateGuaranteeDetails(Admission $admission, array $data, User $actor): Admission
     {
         return DB::transaction(function () use ($admission, $data, $actor): Admission {
             $lockedAdmission = Admission::query()->lockForUpdate()->findOrFail($admission->id);
+            $loaChanged = array_key_exists('coverage_code', $data)
+                && array_key_exists('loa_requested_amount', $data)
+                && ($lockedAdmission->coverage_code !== $data['coverage_code']
+                    || (string) $lockedAdmission->loa_requested_amount !== (string) $data['loa_requested_amount']);
             $lockedAdmission->update($data);
+            if ($loaChanged && filled($lockedAdmission->coverage_code) && $lockedAdmission->loa_requested_amount !== null) {
+                $lockedAdmission->update([
+                    'loa_status' => 'PENDING',
+                    'loa_approved_amount' => null,
+                    'loa_decided_at' => null,
+                    'loa_payer_reference' => null,
+                    'integration_external_id' => null,
+                ]);
+                $this->queueLoaRequest($lockedAdmission);
+            }
             $this->audit->log(
                 'UPDATE_ADMISSION_GUARANTEE_DETAILS',
                 'admission',
@@ -159,6 +183,14 @@ class AdmissionService
 
             return $lockedAdmission->fresh();
         });
+    }
+
+    private function queueLoaRequest(Admission $admission): void
+    {
+        app(IntegrationOutboxService::class)->enqueue('hics', 'admission_loa', $admission->id, [
+            'purpose' => 'hics_loa_admission',
+            'version' => hash('sha256', $admission->coverage_code.'|'.$admission->loa_requested_amount),
+        ]);
     }
 
     public function approve(Admission $admission): Admission
@@ -264,6 +296,9 @@ class AdmissionService
             $this->markDischarged($lockedAdmission);
             $this->releaseActiveBedIfPresent($lockedAdmission);
             $this->audit->dischargePatient($lockedAdmission->id);
+            if ($lockedAdmission->dischargeSummary) {
+                app(RoundTwoIntegrationService::class)->enqueueDischargedSummary($lockedAdmission->dischargeSummary);
+            }
 
             return $discharge;
         });

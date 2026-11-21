@@ -79,4 +79,9 @@ class Encounter extends Model
     {
         return $this->hasMany(EncounterBill::class);
     }
+
+    public function integrationClinicalDocuments(): HasMany
+    {
+        return $this->hasMany(IntegrationClinicalDocument::class);
+    }
 }

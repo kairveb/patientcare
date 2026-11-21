@@ -34,7 +34,12 @@ class EmergencyTriageChainTest extends TestCase
         $role = Role::firstOrCreate(['name' => 'nurse'], ['label' => 'Nurse']);
         $triagePermission = Permission::firstOrCreate(['name' => 'triage-patients'], ['label' => 'Triage Patients']);
         $erPermission = Permission::firstOrCreate(['name' => 'view-er'], ['label' => 'View ER']);
-        $role->permissions()->syncWithoutDetaching([$triagePermission->id, $erPermission->id]);
+        $createErPermission = Permission::firstOrCreate(['name' => 'create-er-visits'], ['label' => 'Create ER Visits']);
+        $role->permissions()->syncWithoutDetaching([
+            $triagePermission->id,
+            $erPermission->id,
+            $createErPermission->id,
+        ]);
         $nurse->roles()->syncWithoutDetaching([$role->id]);
 
         $this->actingAs($nurse);

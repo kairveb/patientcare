@@ -136,7 +136,11 @@ class UserAdministrationService
                 }
             }
 
-            $lockedUser->forceFill(['is_active' => $active])->save();
+            $lockedUser->forceFill([
+                'is_active' => $active,
+                'account_status_source' => 'local',
+                'sas_account_status' => null,
+            ])->save();
             if (! $active) {
                 $lockedUser->tokens()->delete();
             }

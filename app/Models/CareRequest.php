@@ -15,6 +15,10 @@ class CareRequest extends Model
         'remarks' => 'encrypted',
         'result_text' => 'encrypted',
         'decided_at' => 'datetime',
+        'partner_status_updated_at' => 'datetime',
+        'loa_requested_amount' => 'decimal:2',
+        'loa_approved_amount' => 'decimal:2',
+        'loa_decided_at' => 'datetime',
     ];
 
     public const TYPE_LAB = 'lab';

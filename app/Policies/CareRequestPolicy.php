@@ -65,7 +65,7 @@ class CareRequestPolicy
     {
         return $this->view($user, $careRequest)
             && $careRequest->status === CareRequest::STATUS_APPROVED
-            && $careRequest->result_text !== null;
+            && ($careRequest->result_text !== null || $careRequest->result_reference !== null);
     }
 
     public function viewSlip(User $user, CareRequest $careRequest): bool

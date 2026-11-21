@@ -43,7 +43,7 @@
                         </x-nav-link>
                     @endif
 
-                    @if (auth()->user()->can('view-reports') && auth()->user()->hasRole('super-admin'))
+                    @if (auth()->user()->can('view-reports') && auth()->user()->hasAnyRole(['nurse', 'registration', 'admin', 'super-admin']))
                         <x-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                             {{ __('Reports') }}
                         </x-nav-link>
@@ -139,7 +139,7 @@
                 </x-responsive-nav-link>
             @endif
 
-            @can('view-reports')
+            @if (auth()->user()->can('view-reports') && auth()->user()->hasAnyRole(['nurse', 'registration', 'admin', 'super-admin']))
                 <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                     {{ __('Reports') }}
                 </x-responsive-nav-link>

@@ -22,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'cors' => \App\Http\Middleware\AllowCors::class,
             'report.password.confirm' => \App\Http\Middleware\EnsureRecentReportPasswordConfirmation::class,
+            'integration.partner' => \App\Http\Middleware\EnsureIntegrationPartner::class,
+            'integration.webhook' => \App\Http\Middleware\VerifyIntegrationWebhookSignature::class,
+            'integration.api.log' => \App\Http\Middleware\LogIntegrationApiRequest::class,
         ]);
 
         $middleware->prependToGroup('web', [

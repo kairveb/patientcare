@@ -89,6 +89,10 @@ class AdmissionApiController extends Controller
                 'guarantor_relationship' => $admission->guarantor_relationship,
                 'guarantor_contact' => $admission->guarantor_contact,
                 'loa_reference' => $admission->loa_reference,
+                'loa_status' => $admission->loa_status,
+                'loa_approved_amount' => $admission->loa_approved_amount,
+                'loa_decided_at' => $admission->loa_decided_at,
+                'loa_payer_reference' => $admission->loa_payer_reference,
             ],
         ]);
     }

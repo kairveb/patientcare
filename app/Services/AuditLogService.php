@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\IntegrationPartner;
 use App\Models\TriageAssessment;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
+use Throwable;
 
 class AuditLogService
 {
@@ -22,7 +25,7 @@ class AuditLogService
     ): AuditLog {
         $userId = $userId ?? Auth::id();
 
-        return AuditLog::create([
+        $entry = AuditLog::create([
             'user_id' => $userId,
             'action' => $action,
             'resource_type' => $resourceType,
@@ -31,6 +34,36 @@ class AuditLogService
             'ip_address' => Request::ip(),
             'metadata' => $metadata,
         ]);
+
+        if (in_array($action, [
+            'LOGIN_FAILURE',
+            'LOGIN_LOCKOUT',
+            'OTP_LOCKOUT',
+            'ADMIN_ASSIGN_USER_ROLE',
+            'EXPORT_REPORT',
+            'HADS_EXPORT_REQUESTED',
+        ], true)) {
+            try {
+                $partner = IntegrationPartner::query()->where('code', 'sas')->where('active', true)->firstOrFail();
+                $actorReference = $userId !== null
+                    ? app(IntegrationReferenceMapService::class)->for($partner, 'user', $userId)
+                    : null;
+                app(IntegrationOutboxService::class)->enqueue('sas', 'sas_audit_event', (int) $entry->id, [
+                    'event_type' => $action,
+                    'actor_ref' => $actorReference,
+                    'timestamp' => $entry->created_at?->toIso8601String(),
+                    'outcome' => $result ?? 'SUCCESS',
+                ]);
+            } catch (Throwable $exception) {
+                Log::warning('SAS audit event could not be queued; the local audit entry was retained.', [
+                    'audit_log_id' => $entry->id,
+                    'event_type' => $action,
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
+        return $entry;
     }
 
     // Common actions

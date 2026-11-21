@@ -12,6 +12,7 @@ class Prescription extends Model
     protected $casts = [
         'prescribed_at' => 'datetime',
         'dispensed_at' => 'datetime',
+        'partner_status_updated_at' => 'datetime',
     ];
 
     public function telehealthSession(): BelongsTo

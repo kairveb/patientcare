@@ -22,6 +22,8 @@ class StoreCareRequestRequest extends FormRequest
             'type' => ['required', 'in:lab,imaging,procedure'],
             'description' => ['required', 'string', 'min:3', 'max:5000'],
             'urgency' => ['required', 'in:routine,urgent'],
+            'coverage_code' => ['nullable', 'required_with:loa_requested_amount', 'string', 'max:80'],
+            'loa_requested_amount' => ['nullable', 'required_with:coverage_code', 'numeric', 'min:0.01', 'decimal:0,2'],
         ];
     }
 }

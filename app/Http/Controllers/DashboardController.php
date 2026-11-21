@@ -37,7 +37,7 @@ class DashboardController extends Controller
             $data['appointmentsTodayCount'] = $todayAppointmentsQuery->count();
         }
 
-        if ($user->hasAnyRole(['registration', 'admin', 'super-admin'])) {
+        if ($user->hasAnyRole(['registration', 'super-admin'])) {
             $data['openPrivacyRequestCount'] = DataSubjectRequest::query()
                 ->whereIn('status', [DataSubjectRequest::STATUS_SUBMITTED, DataSubjectRequest::STATUS_IN_REVIEW])
                 ->count();
@@ -214,6 +214,10 @@ class DashboardController extends Controller
             $data['checkedInToday'] = Appointment::whereDate('starts_at', today())
                 ->where('status', 'CHECKED_IN')
                 ->count();
+        }
+
+        if ($user->hasRole('admin')) {
+            $data['adminAppointmentCount'] = Appointment::query()->count();
         }
 
         if ($user->hasRole('super-admin')) {

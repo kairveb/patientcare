@@ -6,6 +6,7 @@ use App\Models\Patient;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\AdminRoleSeeder;
 use Database\Seeders\HimsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -76,7 +77,7 @@ class RbacMatrixTest extends TestCase
         $this->actingAs($patient, 'web')->get('/audit-logs')->assertForbidden();
     }
 
-    public function test_general_appointment_booking_route_is_restricted_to_registration_and_super_admin_even_if_permission_is_present(): void
+    public function test_doctors_cannot_book_appointments_even_if_permission_is_present(): void
     {
         $this->seed(HimsSeeder::class);
 
@@ -119,6 +120,8 @@ class RbacMatrixTest extends TestCase
 
         $registration = User::whereHas('roles', fn ($query) => $query->where('name', 'registration'))->firstOrFail();
         $this->actingAs($registration, 'web')->get('/appointments/create')->assertOk();
+        $nurse = User::whereHas('roles', fn ($query) => $query->where('name', 'nurse'))->firstOrFail();
+        $this->actingAs($nurse, 'web')->get('/appointments/create')->assertOk();
     }
 
     public function test_sidebar_menu_respects_role_access_matrix(): void
@@ -153,6 +156,7 @@ class RbacMatrixTest extends TestCase
             }
             $response = $this->actingAs($user, 'web')->get('/dashboard');
             $response->assertOk();
+            $response->assertDontSee('No dashboard modules assigned');
             $visibleModules = array_values(array_filter(
                 $modules,
                 fn (string $module): bool => ! in_array($module, $expectations['hide'], true)
@@ -166,7 +170,128 @@ class RbacMatrixTest extends TestCase
             foreach ($expectations['hide'] as $text) {
                 $response->assertDontSee($text);
             }
+            if ($roleName === 'admin') {
+                $response->assertSee(route('appointments.index'), false)
+                    ->assertSee(route('appointment-reassignments.index'), false)
+                    ->assertSee(route('reports.index'), false)
+                    ->assertSee(route('admin.users.index'), false)
+                    ->assertDontSee(route('emergency.index'), false)
+                    ->assertDontSee(route('admissions.index'), false)
+                    ->assertDontSee(route('beds.index'), false)
+                    ->assertDontSee('/transport-requests');
+            }
         }
+    }
+
+    public function test_visible_sidebar_and_dashboard_links_open_for_all_six_roles(): void
+    {
+        $this->seed(HimsSeeder::class);
+        $admin = User::factory()->create(['email' => 'dashboard-audit-admin@example.test']);
+        $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail());
+
+        foreach (['patient', 'doctor', 'nurse', 'registration', 'admin', 'super-admin'] as $roleName) {
+            $user = $roleName === 'admin'
+                ? $admin
+                : User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            if ($roleName === 'patient') {
+                $this->acceptSeededPatientConsent($user);
+            }
+
+            $dashboard = $this->actingAs($user, 'web')->get('/dashboard')->assertOk();
+            preg_match_all('/<a\b[^>]*\bhref="([^"]+)"/i', $dashboard->getContent(), $matches);
+            $appHost = parse_url(config('app.url'), PHP_URL_HOST);
+
+            foreach (array_unique($matches[1]) as $href) {
+                $href = html_entity_decode($href, ENT_QUOTES);
+                $path = parse_url($href, PHP_URL_PATH);
+                $host = parse_url($href, PHP_URL_HOST);
+                if (! is_string($path) || $path === '' || $path === '#' || ($host && $host !== $appHost)) {
+                    continue;
+                }
+
+                if ($path === route('logout', [], false)) {
+                    continue;
+                }
+
+                $query = parse_url($href, PHP_URL_QUERY);
+                $target = $path.($query ? '?'.$query : '');
+                $response = $this->actingAs($user, 'web')->get($target);
+                $this->assertTrue(
+                    $response->status() >= 200 && $response->status() < 300,
+                    "{$roleName} has a visible link to {$target} that cannot be opened."
+                );
+            }
+        }
+    }
+
+    public function test_er_visit_creation_uses_the_same_role_and_permission_matrix_on_web_and_api(): void
+    {
+        $this->seed(HimsSeeder::class);
+        $admin = User::factory()->create(['email' => 'er-access-admin@example.test']);
+        $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail());
+        $superAdmin = User::whereHas('roles', fn ($query) => $query->where('name', 'super-admin'))->firstOrFail();
+        $patient = Patient::query()->firstOrFail();
+        $patientUser = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
+        $this->acceptSeededPatientConsent($patientUser);
+        $allowedRoles = ['nurse', 'registration', 'super-admin'];
+
+        foreach (['patient', 'doctor', 'nurse', 'registration', 'admin', 'super-admin'] as $roleName) {
+            $user = $roleName === 'admin'
+                ? $admin
+                : User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            $allowed = in_array($roleName, $allowedRoles, true);
+
+            $this->actingAs($user, 'web')->get(route('emergency.create'))
+                ->assertStatus($allowed ? 200 : 403);
+            $this->actingAs($user, 'web')->post(route('emergency.store'), [
+                'patient_id' => $patient->id,
+                'chief_complaint' => 'Synthetic access-control test',
+            ])->assertStatus($allowed ? 302 : 403);
+            $apiCreate = $this->actingAs($user, 'sanctum')->postJson('/api/v1/emergency/visits', [
+                'patient_id' => $patient->id,
+                'chief_complaint' => 'Synthetic access-control test',
+            ]);
+            $this->assertSame($allowed ? 201 : 403, $apiCreate->status(), "{$roleName} ER visit API access mismatch: ".$apiCreate->getContent());
+            $apiUnknown = $this->actingAs($user, 'sanctum')->postJson('/api/v1/emergency/visits/unknown', [
+                'first_name' => 'Synthetic',
+                'last_name' => 'Arrival',
+                'chief_complaint' => 'Synthetic access-control test',
+            ]);
+            $this->assertSame($allowed ? 201 : 403, $apiUnknown->status(), "{$roleName} unknown-arrival API access mismatch.");
+            $this->actingAs($user, 'web')->post(route('emergency.unknown-arrivals.store'), [
+                'first_name' => 'Synthetic',
+                'last_name' => 'Arrival',
+                'chief_complaint' => 'Synthetic access-control test',
+            ])->assertStatus($allowed ? 302 : 403);
+        }
+
+        Role::query()->where('name', 'super-admin')->firstOrFail()->permissions()->detach(
+            Permission::query()->where('name', 'create-er-visits')->value('id')
+        );
+        $this->actingAs($superAdmin, 'web')->get(route('emergency.create'))->assertForbidden();
+        $this->actingAs($superAdmin, 'web')->post(route('emergency.store'), [
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Synthetic unauthorized ER creation',
+        ])->assertForbidden();
+        $this->actingAs($superAdmin, 'sanctum')->postJson('/api/v1/emergency/visits', [
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Synthetic unauthorized ER creation',
+        ])->assertForbidden();
+
+        $doctor = User::whereHas('roles', fn ($query) => $query->where('name', 'doctor'))->firstOrFail();
+        $this->actingAs($doctor, 'web')->get(route('emergency.index'))
+            ->assertOk()
+            ->assertDontSee('New ER Intake')
+            ->assertDontSee('Patient Triage Intake')
+            ->assertDontSee('id="intakeModal"', false);
+        $this->actingAs($doctor, 'web')->get('/triage')
+            ->assertOk()
+            ->assertSee('Select an existing ER visit')
+            ->assertDontSee('name="patient_id"', false);
+        $this->actingAs($doctor, 'web')->post('/triage', [
+            'patient_id' => $patient->id,
+            'chief_complaint' => 'Synthetic unauthorized triage intake',
+        ])->assertForbidden();
     }
 
     public function test_audit_logs_can_filter_by_action(): void
@@ -318,12 +443,14 @@ class RbacMatrixTest extends TestCase
         $doctor = Role::where('name', 'doctor')->first();
         $nurse = Role::where('name', 'nurse')->first();
         $patient = Role::where('name', 'patient')->first();
+        $admin = Role::where('name', 'admin')->first();
 
         $this->assertNotNull($superAdmin);
         $this->assertNotNull($registration);
         $this->assertNotNull($doctor);
         $this->assertNotNull($nurse);
         $this->assertNotNull($patient);
+        $this->assertNotNull($admin);
 
         $this->assertSame('Registration / Front Desk', $registration->label);
         $this->assertSame('Super Admin', $superAdmin->label);
@@ -336,6 +463,17 @@ class RbacMatrixTest extends TestCase
         $this->assertTrue($registration->permissions()->where('name', 'view-admissions')->exists());
         $this->assertTrue($registration->permissions()->where('name', 'assign-beds')->exists());
         $this->assertTrue($registration->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($doctor->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($nurse->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($admin->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($superAdmin->permissions()->where('name', 'view-reports')->exists());
+        $this->assertFalse($patient->permissions()->where('name', 'view-reports')->exists());
+        $this->assertTrue($nurse->permissions()->where('name', 'create-er-visits')->exists());
+        $this->assertTrue($registration->permissions()->where('name', 'create-er-visits')->exists());
+        $this->assertTrue($superAdmin->permissions()->where('name', 'create-er-visits')->exists());
+        $this->assertFalse($doctor->permissions()->where('name', 'create-er-visits')->exists());
+        $this->assertFalse($admin->permissions()->where('name', 'create-er-visits')->exists());
+        $this->assertFalse($admin->permissions()->whereIn('name', ['view-er', 'view-admissions'])->exists());
         $this->assertTrue($doctor->permissions()->where('name', 'view-triage')->exists());
         $this->assertFalse($doctor->permissions()->where('name', 'update-patients')->exists());
         $this->assertFalse($doctor->permissions()->where('name', 'update-appointments')->exists());
@@ -374,6 +512,8 @@ class RbacMatrixTest extends TestCase
         $patient = User::whereHas('roles', fn ($query) => $query->where('name', 'patient'))->firstOrFail();
         $this->acceptSeededPatientConsent($patient);
         $frontDesk = User::whereHas('roles', fn ($query) => $query->where('name', 'registration'))->firstOrFail();
+        $admin = User::factory()->create(['email' => 'dashboard-role-admin@example.test']);
+        $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail());
 
         $doctorResponse = $this->actingAs($doctor, 'web')->get('/dashboard');
         $doctorResponse->assertOk();
@@ -394,6 +534,30 @@ class RbacMatrixTest extends TestCase
         $frontDeskResponse->assertOk();
         $frontDeskResponse->assertSee('Registration desk');
         $frontDeskResponse->assertDontSee('Bed occupancy');
+
+        $adminResponse = $this->actingAs($admin, 'web')->get('/dashboard');
+        $adminResponse->assertOk()
+            ->assertSee('Operational dashboard')
+            ->assertDontSee('No dashboard modules assigned')
+            ->assertDontSee(route('emergency.index'), false)
+            ->assertDontSee(route('admissions.index'), false)
+            ->assertDontSee(route('beds.index'), false)
+            ->assertDontSee('/transport-requests');
+    }
+
+    public function test_admin_role_seeder_detaches_only_er_and_admission_view_permissions_idempotently(): void
+    {
+        $this->seed(HimsSeeder::class);
+        $admin = Role::query()->where('name', 'admin')->firstOrFail();
+        $admin->permissions()->syncWithoutDetaching(
+            Permission::query()->whereIn('name', ['view-er', 'view-admissions', 'view-patients'])->pluck('id')
+        );
+
+        $this->seed(AdminRoleSeeder::class);
+        $this->seed(AdminRoleSeeder::class);
+
+        $this->assertFalse($admin->fresh()->permissions()->whereIn('name', ['view-er', 'view-admissions'])->exists());
+        $this->assertTrue($admin->fresh()->permissions()->where('name', 'view-patients')->exists());
     }
 
     public function test_ibms_sidebar_shows_only_links_available_to_each_role(): void
@@ -405,11 +569,14 @@ class RbacMatrixTest extends TestCase
             'nurse' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
             'registration' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
             'patient' => ['items' => ['Discharge summaries'], 'hidden' => ['Bed Board', 'Admissions']],
+            'admin' => ['items' => ['Bed Setup'], 'hidden' => ['Bed Board', 'Admissions']],
             'super-admin' => ['items' => ['Bed Board', 'Admissions'], 'hidden' => []],
         ];
 
         foreach ($roles as $roleName => $expectations) {
-            $user = User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
+            $user = $roleName === 'admin'
+                ? tap(User::factory()->create(['email' => 'ibms-sidebar-admin@example.test']), fn (User $admin) => $admin->roles()->attach(Role::query()->where('name', 'admin')->firstOrFail()))
+                : User::whereHas('roles', fn ($query) => $query->where('name', $roleName))->firstOrFail();
             if ($roleName === 'patient') {
                 $this->acceptSeededPatientConsent($user);
             }

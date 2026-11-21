@@ -20,7 +20,12 @@ Set `DB_CONNECTION=mariadb`, `BROADCAST_CONNECTION=null`, `QUEUE_CONNECTION=data
    composer install --no-dev --optimize-autoloader --no-interaction
    php artisan key:generate
    php artisan migrate --force
-   php artisan db:seed --force
+   php artisan db:seed --class="Database\Seeders\ReferenceDataSeeder" --force
+   php artisan db:seed --class="Database\Seeders\RbacReconciliationSeeder" --force
+   php artisan db:seed --class="Database\Seeders\AdminRoleSeeder" --force
+   php artisan db:seed --class="Database\Seeders\CareRequestRbacSeeder" --force
+   php artisan db:seed --class="Database\Seeders\IntegrationPartnerSeeder" --force
+   php artisan db:seed --class="Database\Seeders\IntegrationRbacSeeder" --force
    php artisan app:bootstrap-admin
    php artisan storage:link
    php artisan config:cache
@@ -30,7 +35,7 @@ Set `DB_CONNECTION=mariadb`, `BROADCAST_CONNECTION=null`, `QUEUE_CONNECTION=data
    php artisan slots:generate
    ```
 
-   Generate `APP_KEY` only when first setting up an environment; do not generate a new key during ordinary releases. `app:bootstrap-admin` reads `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, and `BOOTSTRAP_ADMIN_PASSWORD` from the process environment only when no Super Admin exists. It creates a new account once, never changes an existing account or roles, and is safe to rerun; after successful bootstrap, remove `BOOTSTRAP_ADMIN_PASSWORD` from HostForge. It does not print or store the password in Laravel's config cache. `DatabaseSeeder` installs reference data, RBAC permissions, the admin role, and care-request RBAC in every environment. It skips demo accounts and synthetic demo data in production; only the non-production branch runs demo seeders. Thus `db:seed --force` uses the current production-safe `DatabaseSeeder`; do not invoke `HimsSeeder` or `DemoDataSeeder` in production. `app:create-admin` remains an interactive legacy command and can update existing Super Admin credentials and roles; use the new bootstrap command instead. `hims:preflight` reads migration state from the database, so it must run after migrations. Run `slots:generate` after provider schedules have been configured; otherwise it may create no slots.
+   Generate `APP_KEY` only when first setting up an environment; do not generate a new key during ordinary releases. `app:bootstrap-admin` reads `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, and `BOOTSTRAP_ADMIN_PASSWORD` from the process environment only when no Super Admin exists. It creates a new account once, never changes an existing account or roles, and is safe to rerun; after successful bootstrap, remove `BOOTSTRAP_ADMIN_PASSWORD` from HostForge. It does not print or store the password in Laravel's config cache. Production must use the explicitly listed seeder classes; do not run plain `php artisan db:seed`/`DatabaseSeeder`, `HimsSeeder`, or `DemoDataSeeder`. These production seeders are idempotent and repeat-safe. `app:create-admin` remains an interactive legacy command and can update existing Super Admin credentials and roles; use the new bootstrap command instead. `hims:preflight` reads migration state from the database, so it must run after migrations. Run `slots:generate` after provider schedules have been configured; otherwise it may create no slots.
 
    For startup-managed migrations, set `RUN_MIGRATIONS=true` only for a serialized rollout with one instance; the entrypoint runs `php artisan migrate --force` and stops on failure. Otherwise leave it false and run that migration command as the release task before starting the new application version. Do not enable startup migrations simultaneously across replicas.
 6. Confirm the platform health check uses `/up`, the Apache listener/vhost use the assigned `$PORT`, `pdo_mysql` is present in the built image, and the `resources/data/psgc_2026_q2.csv` dataset is packaged and readable. The address picker streams this bundled CSV and needs no PSGC seeder, dataset cache, cache-table migration, or warm-up command. Its API routes are still rate-limited at 60 requests per minute through Laravel's configured cache backend; keep that backend available for throttling independently of dataset loading.

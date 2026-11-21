@@ -50,8 +50,16 @@ class TriageDecisionAuditTest extends TestCase
     {
         $doctor = $this->userWithRole('doctor');
         $patient = $this->patient();
+        $visit = ErVisit::create([
+            'visit_number' => 'ER-DECISION-'.Str::uuid(),
+            'patient_id' => $patient->id,
+            'arrived_at' => now(),
+            'arrival_method' => 'Walk-in',
+            'chief_complaint' => 'Cold follow-up',
+            'status' => ErVisit::STATUS_ARRIVED,
+        ]);
 
-        $this->actingAs($doctor)->post(route('triage.store'), $this->triagePayload($patient, [
+        $this->actingAs($doctor)->post(route('emergency.triage', $visit), $this->triagePayload($patient, [
             'priority_override' => 'Emergency',
             'override_reason' => 'Patient appears acutely unstable.',
         ]))->assertRedirect();
@@ -204,7 +212,22 @@ class TriageDecisionAuditTest extends TestCase
     {
         $role = Role::firstOrCreate(['name' => $roleName], ['label' => ucfirst($roleName)]);
         $permission = Permission::firstOrCreate(['name' => 'triage-patients'], ['label' => 'Triage Patients']);
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $permissions = [$permission->id];
+        if (in_array($roleName, ['nurse', 'doctor'], true)) {
+            $viewErPermission = Permission::firstOrCreate(
+                ['name' => 'view-er'],
+                ['label' => 'View ER']
+            );
+            $permissions[] = $viewErPermission->id;
+        }
+        if (in_array($roleName, ['nurse', 'super-admin'], true)) {
+            $createErPermission = Permission::firstOrCreate(
+                ['name' => 'create-er-visits'],
+                ['label' => 'Create ER Visits']
+            );
+            $permissions[] = $createErPermission->id;
+        }
+        $role->permissions()->syncWithoutDetaching($permissions);
 
         $user = User::factory()->create([
             'email' => $roleName.'.'.Str::uuid().'@example.test',

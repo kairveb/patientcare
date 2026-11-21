@@ -60,6 +60,16 @@
                     <input id="loa_reference" name="loa_reference" value="{{ old('loa_reference') }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
                     @error('loa_reference')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
+                <div>
+                    <label for="coverage_code" class="mb-1.5 block text-sm font-medium text-slate-700">Insurance coverage code</label>
+                    <input id="coverage_code" name="coverage_code" value="{{ old('coverage_code') }}" maxlength="80" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                    @error('coverage_code')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="loa_requested_amount" class="mb-1.5 block text-sm font-medium text-slate-700">LOA requested amount</label>
+                    <input id="loa_requested_amount" name="loa_requested_amount" type="number" min="0.01" step="0.01" value="{{ old('loa_requested_amount') }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                    @error('loa_requested_amount')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
             </div>
 
             <div class="flex flex-wrap gap-3 pt-2">

@@ -9,6 +9,9 @@ use App\Models\ErVisit;
 use App\Models\Patient;
 use App\Models\Provider;
 use App\Models\TriageAssessment;
+use App\Models\TransportRequest;
+use App\Models\User;
+use App\Policies\ErVisitPolicy;
 use App\Services\TriageService;
 use App\Services\DischargeSummaryService;
 use App\Services\BillingAggregationService;
@@ -67,12 +70,14 @@ class EmergencyController extends Controller
         $visits = ErVisit::with('patient')->orderBy('arrived_at', 'desc')->limit(10)->get();
         $patients = Patient::orderBy('last_name')->get();
         $providers = Provider::where('active', true)->orderBy('display_name')->get();
+        $canCreateErVisit = $this->canCreateErVisit();
 
-        return view('emergency.index', compact('queue', 'visits', 'patients', 'providers'));
+        return view('emergency.index', compact('queue', 'visits', 'patients', 'providers', 'canCreateErVisit'));
     }
 
     public function create(Request $request)
     {
+        $this->authorizeErVisitCreation();
         $patients = Patient::orderBy('last_name')->get();
 
         $prefill = [
@@ -117,6 +122,7 @@ class EmergencyController extends Controller
 
     public function createFromTriage(TriageAssessment $triageAssessment)
     {
+        $this->authorizeErVisitCreation();
         $request = new Request(['triage_assessment_id' => $triageAssessment->id]);
 
         return $this->create($request);
@@ -124,6 +130,7 @@ class EmergencyController extends Controller
 
     public function store(Request $request): \Illuminate\Http\RedirectResponse|JsonResponse
     {
+        $this->authorizeErVisitCreation();
         $data = $request->validate([
             'triage_assessment_id' => ['nullable', 'exists:triage_assessments,id'],
             'patient_id' => ['nullable', 'required_without_all:reference_code,triage_assessment_id', 'exists:patients,id'],
@@ -243,6 +250,7 @@ class EmergencyController extends Controller
 
     public function storeUnknownArrival(CreateUnknownErArrivalRequest $request): JsonResponse|RedirectResponse
     {
+        $this->authorizeErVisitCreation();
         $visit = $this->triage->registerUnknownErVisit($request->validated());
 
         if ($request->expectsJson()) {
@@ -278,6 +286,11 @@ class EmergencyController extends Controller
             'dischargeSummary',
         ]);
         $providers = Provider::where('active', true)->get();
+        $transportRequest = TransportRequest::query()
+            ->where('source_type', 'er_visit')
+            ->where('source_id', $visit->id)
+            ->latest()
+            ->first();
         $dischargeRequirements = [];
         if ($visit->queue) {
             try {
@@ -293,7 +306,7 @@ class EmergencyController extends Controller
         }
         $canCompleteErVisit = $visit->queue && $dischargeRequirements === [];
 
-        return view('emergency.show', compact('visit', 'providers', 'dischargeRequirements', 'canCompleteErVisit'));
+        return view('emergency.show', compact('visit', 'providers', 'dischargeRequirements', 'canCompleteErVisit', 'transportRequest'));
     }
 
     public function triage(StoreTriageDecisionRequest $request, ErVisit $visit): \Illuminate\Http\RedirectResponse|JsonResponse
@@ -364,6 +377,18 @@ class EmergencyController extends Controller
             'routine' => 'Level 5',
             default => $priority,
         };
+    }
+
+    private function authorizeErVisitCreation(): void
+    {
+        abort_unless($this->canCreateErVisit(), 403);
+    }
+
+    private function canCreateErVisit(): bool
+    {
+        $user = request()->user();
+
+        return $user instanceof User && app(ErVisitPolicy::class)->create($user);
     }
 
     public function queueStatus(Request $request, ErQueue $queue)

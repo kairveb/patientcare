@@ -21,6 +21,9 @@ class Admission extends Model
     protected $casts = [
         'admitted_at' => 'datetime',
         'loa_reference' => 'encrypted',
+        'loa_requested_amount' => 'decimal:2',
+        'loa_approved_amount' => 'decimal:2',
+        'loa_decided_at' => 'datetime',
     ];
 
     public const STATUS_REQUESTED = 'REQUESTED';

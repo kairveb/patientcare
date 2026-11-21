@@ -24,6 +24,8 @@ class CreateAdmissionFromErVisitRequest extends FormRequest
             'guarantor_relationship' => ['nullable', 'string', 'max:100'],
             'guarantor_contact' => ['nullable', 'string', 'max:30'],
             'loa_reference' => ['nullable', 'string', 'max:255'],
+            'coverage_code' => ['nullable', 'required_with:loa_requested_amount', 'string', 'max:80'],
+            'loa_requested_amount' => ['nullable', 'required_with:coverage_code', 'numeric', 'min:0.01', 'decimal:0,2'],
         ];
     }
 }

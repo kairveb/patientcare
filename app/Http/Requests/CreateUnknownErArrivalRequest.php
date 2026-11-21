@@ -12,7 +12,7 @@ class CreateUnknownErArrivalRequest extends FormRequest
         $user = $this->user();
 
         return $user !== null
-            && $user->hasRole('registration', 'nurse')
+            && $user->hasRole('registration', 'nurse', 'super-admin')
             && $user->hasPermission('create-er-visits');
     }
 

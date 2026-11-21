@@ -7,6 +7,57 @@
 
 @section('content')
 <div class="space-y-6">
+    <section class="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 class="text-lg font-semibold text-slate-900">HADS aggregate export</h2>
+        <p class="mt-1 text-sm text-slate-600">Requests contain aggregate operational counts or totals only; patient identifiers and clinical notes are excluded.</p>
+        <form method="POST" action="{{ route('reports.hads-exports.store') }}" class="mt-4 flex flex-wrap items-end gap-3">
+            @csrf
+            <label class="text-xs text-slate-600">Dataset
+                <select name="dataset" required class="mt-1 block rounded-lg border-slate-300 text-sm">
+                    <option value="appointments">Appointments</option>
+                    <option value="encounters">Encounters</option>
+                    <option value="triage_levels">Triage levels</option>
+                    <option value="er_visits">ER visits</option>
+                    <option value="bed_occupancy">Bed occupancy</option>
+                    <option value="billing_totals">Billing totals</option>
+                </select>
+            </label>
+            <label class="text-xs text-slate-600">From
+                <input type="date" name="from" required value="{{ old('from', today()->subDays(30)->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm">
+            </label>
+            <label class="text-xs text-slate-600">To
+                <input type="date" name="to" required value="{{ old('to', today()->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm">
+            </label>
+            <label class="text-xs text-slate-600">Format
+                <select name="format" required class="mt-1 block rounded-lg border-slate-300 text-sm">
+                    <option value="csv">CSV</option>
+                    <option value="pdf">PDF</option>
+                    <option value="txt">TXT</option>
+                    <option value="xls">XLS</option>
+                </select>
+            </label>
+            <button type="submit" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Queue export</button>
+        </form>
+        @if ($hadsExports->isNotEmpty())
+            <div class="mt-5 overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead><tr class="border-b text-slate-500"><th class="py-2 pr-4">Dataset</th><th class="py-2 pr-4">Period</th><th class="py-2 pr-4">Format</th><th class="py-2 pr-4">Status</th><th class="py-2 pr-4">Rows</th><th class="py-2">Expires</th></tr></thead>
+                    <tbody>
+                    @foreach ($hadsExports as $export)
+                        <tr class="border-b last:border-0">
+                            <td class="py-2 pr-4">{{ str($export->dataset)->replace('_', ' ')->title() }}</td>
+                            <td class="py-2 pr-4">{{ $export->period_from->toDateString() }} – {{ $export->period_to->toDateString() }}</td>
+                            <td class="py-2 pr-4">{{ strtoupper($export->format) }}</td>
+                            <td class="py-2 pr-4">{{ $export->status }}</td>
+                            <td class="py-2 pr-4">{{ $export->row_count ?? '—' }}</td>
+                            <td class="py-2">{{ $export->expires_at?->format('M d, Y') ?? '—' }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </section>
     <form method="GET" class="hims-filter-bar rounded-xl border border-slate-200 bg-white p-4">
         <label class="text-xs text-slate-600">Start date<input type="date" name="start" value="{{ request('start', today()->subDays(30)->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>
         <label class="text-xs text-slate-600">End date<input type="date" name="end" value="{{ request('end', today()->toDateString()) }}" class="mt-1 block rounded-lg border-slate-300 text-sm"></label>

@@ -24,6 +24,9 @@
             <div><span class="text-slate-500">Type:</span> <span class="px-2 py-1 text-xs rounded-full bg-slate-100">{{ $encounter->type }}</span></div>
             <div><span class="text-slate-500">Status:</span> <span class="px-2 py-1 text-xs rounded-full bg-slate-100">{{ $encounter->status }}</span></div>
             <div class="col-span-1"><span class="text-slate-500">Started:</span> {{ $encounter->started_at->format('M d, Y g:i A') }}</div>
+            @if ($encounter->integrationClinicalDocuments->isNotEmpty())
+                <div class="col-span-1"><span class="text-slate-500">EMRS documents:</span> {{ $encounter->integrationClinicalDocuments->count() }} linked</div>
+            @endif
             @if ($encounter->appointment)
                 <div class="col-span-2"><span class="text-slate-500">Appointment:</span> <span class="font-mono">{{ $encounter->appointment->appointment_number }}</span></div>
             @endif
@@ -103,9 +106,19 @@
                         </select>
                     </label>
                 </div>
+                @error('coverage_code')<p role="alert" class="text-sm text-rose-700">{{ $message }}</p>@enderror
+                @error('loa_requested_amount')<p role="alert" class="text-sm text-rose-700">{{ $message }}</p>@enderror
                 <label class="block text-sm font-medium text-slate-700">Requested service and clinical reason
                     <textarea name="description" required minlength="3" maxlength="5000" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">{{ old('description') }}</textarea>
                 </label>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <label class="block text-sm font-medium text-slate-700">Insurance coverage code (optional)
+                        <input name="coverage_code" maxlength="80" value="{{ old('coverage_code') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="block text-sm font-medium text-slate-700">LOA requested amount (optional)
+                        <input name="loa_requested_amount" type="number" min="0.01" step="0.01" value="{{ old('loa_requested_amount') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                </div>
                 <button type="submit" class="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Submit for approval</button>
             </form>
         </section>
@@ -122,6 +135,9 @@
                             <p class="text-sm text-slate-600">{{ $careRequest->description }}</p>
                             @if ($careRequest->approval_reference)
                                 <p class="text-xs text-slate-500">Reference: {{ $careRequest->approval_reference }}</p>
+                            @endif
+                            @if ($careRequest->external_partner_code)
+                                <p class="text-xs text-slate-500">{{ strtoupper($careRequest->external_partner_code) }}: {{ $careRequest->partner_status ?? 'REQUESTED' }}</p>
                             @endif
                         </div>
                         <a href="{{ route('care-requests.show', $careRequest) }}" class="text-sm font-medium text-teal-700 hover:underline">View request</a>
@@ -200,12 +216,26 @@
                         <p class="mt-1 text-sm text-slate-700">{{ $prescription->instructions }}</p>
                         <p class="mt-1 text-xs text-slate-500">Prescribed {{ $prescription->prescribed_at?->format('M d, Y g:i A') ?? '—' }} by {{ $prescription->prescribedBy?->name ?? 'Clinical team' }}</p>
                         <p class="mt-1 text-xs text-slate-500">Dispensing: {{ $prescription->dispensed_at?->format('M d, Y g:i A') ?? 'Not dispensed' }}</p>
+                        @if ($prescription->partner_status)
+                            <p class="mt-1 text-xs text-slate-500">PMS: {{ $prescription->partner_status }}</p>
+                        @endif
                         @role('super-admin')
                             @if (! $prescription->dispensed_at)
                                 <form method="POST" action="{{ route('prescriptions.dispense', $prescription) }}" class="mt-2">
                                     @csrf
                                     <button class="rounded bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white">Mark dispensed</button>
                                 </form>
+                            @endif
+
+                            @if ($encounter->integrationClinicalDocuments->isNotEmpty())
+                                <section class="rounded-xl border border-slate-200 bg-white p-6">
+                                    <h3 class="font-semibold text-slate-800">Partner clinical documents</h3>
+                                    <ul class="mt-3 space-y-2 text-sm">
+                                        @foreach ($encounter->integrationClinicalDocuments as $document)
+                                            <li>{{ strtoupper($document->partner->code) }} · {{ $document->status }} · {{ $document->created_at->format('M d, Y g:i A') }}</li>
+                                        @endforeach
+                                    </ul>
+                                </section>
                             @endif
                         @endrole
                     </div>

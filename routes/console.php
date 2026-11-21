@@ -2,6 +2,7 @@
 
 use App\Services\AppointmentReminderService;
 use App\Services\DatabaseBackupService;
+use App\Services\IntegrationExportService;
 use App\Services\MailFailureLogger;
 use App\Services\PatientService;
 use App\Mail\TestMailMessage;
@@ -166,3 +167,27 @@ Artisan::command('appointments:send-reminders', function (AppointmentReminderSer
 })->purpose('Queue email reminders for confirmed appointments');
 
 Schedule::command('appointments:send-reminders')->everyMinute()->withoutOverlapping(5);
+
+Artisan::command('hims:request-hads-export {dataset} {from} {to} {format}', function (IntegrationExportService $exports): int {
+    try {
+        $export = $exports->request(
+            (string) $this->argument('dataset'),
+            (string) $this->argument('from'),
+            (string) $this->argument('to'),
+            (string) $this->argument('format')
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->error($exception->getMessage());
+
+        return self::INVALID;
+    }
+
+    $this->info("HADS export {$export->export_ref}: {$export->status}");
+
+    return self::SUCCESS;
+})->purpose('Request a minimized, aggregate-only HADS export for scheduled operational reporting');
+
+Schedule::call(fn (): int => app(IntegrationExportService::class)->expireRetainedExports())
+    ->dailyAt('00:10')
+    ->name('expire-hads-export-snapshots')
+    ->withoutOverlapping();
