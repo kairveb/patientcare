@@ -10,12 +10,14 @@ use App\Models\Encounter;
 use App\Models\Patient;
 use App\Models\Permission;
 use App\Models\Provider;
+use App\Models\ProviderUnavailability;
 use App\Models\Role;
 use App\Models\Specialty;
 use App\Models\User;
 use App\Models\Waitlist;
 use App\Notifications\AppointmentJourneyNotification;
 use App\Services\AppointmentService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -74,38 +76,44 @@ class PatientAppointmentJourneyTest extends TestCase
 
     public function test_calendar_reports_available_fully_booked_and_unavailable_days(): void
     {
-        $provider = Provider::factory()->create();
-        [$patientUser] = $this->patient();
-        $available = now()->addDays(2)->setTime(9, 0);
-        $full = now()->addDays(3)->setTime(9, 0);
-        $unavailable = now()->addDays(4)->setTime(9, 0);
+        Carbon::setTestNow('2026-11-16 12:00:00');
 
-        for ($index = 0; $index < 4; $index++) {
-            $this->slot($provider, $available->copy()->addMinutes(30 * $index));
+        try {
+            $provider = Provider::factory()->create();
+            [$patientUser] = $this->patient();
+            $available = now()->addDays(2)->setTime(9, 0);
+            $full = now()->addDays(3)->setTime(9, 0);
+            $unavailable = now()->addDays(4)->setTime(9, 0);
+
+            for ($index = 0; $index < 4; $index++) {
+                $this->slot($provider, $available->copy()->addMinutes(30 * $index));
+            }
+            $this->slot($provider, $full, AppointmentSlot::STATUS_BOOKED);
+            $blocked = $this->slot($provider, $unavailable);
+            $blocked->update(['status' => AppointmentSlot::STATUS_BLOCKED]);
+            ProviderUnavailability::create([
+                'provider_id' => $provider->id,
+                'starts_at' => $unavailable,
+                'ends_at' => $unavailable->copy()->addMinutes(30),
+                'reason' => 'emergency',
+                'recorded_by' => $patientUser->id,
+            ]);
+
+            $days = $this->actingAs($patientUser)
+                ->getJson(route('doctors.calendar', [
+                    'provider' => $provider,
+                    'month' => $available->format('Y-m'),
+                ]))
+                ->assertOk()
+                ->json('days');
+
+            $states = collect($days)->keyBy('date');
+            $this->assertSame('available', $states->get($available->toDateString())['state']);
+            $this->assertSame('fully_booked', $states->get($full->toDateString())['state']);
+            $this->assertSame('unavailable', $states->get($unavailable->toDateString())['state']);
+        } finally {
+            Carbon::setTestNow();
         }
-        $this->slot($provider, $full, AppointmentSlot::STATUS_BOOKED);
-        $blocked = $this->slot($provider, $unavailable);
-        $blocked->update(['status' => AppointmentSlot::STATUS_BLOCKED]);
-        \App\Models\ProviderUnavailability::create([
-            'provider_id' => $provider->id,
-            'starts_at' => $unavailable,
-            'ends_at' => $unavailable->copy()->addMinutes(30),
-            'reason' => 'emergency',
-            'recorded_by' => $patientUser->id,
-        ]);
-
-        $days = $this->actingAs($patientUser)
-            ->getJson(route('doctors.calendar', [
-                'provider' => $provider,
-                'month' => $available->format('Y-m'),
-            ]))
-            ->assertOk()
-            ->json('days');
-
-        $states = collect($days)->keyBy('date');
-        $this->assertSame('available', $states->get($available->toDateString())['state']);
-        $this->assertSame('fully_booked', $states->get($full->toDateString())['state']);
-        $this->assertSame('unavailable', $states->get($unavailable->toDateString())['state']);
     }
 
     public function test_fully_booked_profile_offers_waitlist_and_same_specialty_alternative(): void

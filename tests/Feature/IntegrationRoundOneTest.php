@@ -51,6 +51,67 @@ class IntegrationRoundOneTest extends TestCase
         }
     }
 
+    public function test_partner_seeder_renames_existing_rows_without_changing_configuration_or_credentials(): void
+    {
+        $partner = IntegrationPartner::query()->where('code', 'bdms')->firstOrFail();
+        $partner->forceFill([
+            'name' => 'Legacy Billing Partner',
+            'active' => false,
+            'mode' => 'live',
+            'api_key_hash' => 'existing-api-key-hash',
+            'webhook_signing_secret' => 'existing-webhook-secret',
+            'allowed_abilities' => ['custom-ability'],
+            'base_url' => 'https://existing.example.test',
+            'outbound_token' => 'existing-outbound-token',
+            'last_used_at' => now()->subDay(),
+        ])->save();
+        $before = $partner->fresh()->getAttributes();
+
+        $this->seed(IntegrationPartnerSeeder::class);
+
+        $partner = $partner->fresh();
+        $this->assertSame('Billing and Discharge Management System (BDMS)', $partner->name);
+        foreach ([
+            'active',
+            'mode',
+            'api_key_hash',
+            'webhook_signing_secret',
+            'allowed_abilities',
+            'base_url',
+            'outbound_token',
+            'last_used_at',
+        ] as $attribute) {
+            $this->assertSame($before[$attribute], $partner->getAttributes()[$attribute], $attribute);
+        }
+    }
+
+    public function test_official_partner_names_are_displayed_in_admin_web_and_api_outputs(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::where('name', 'admin')->firstOrFail());
+        $names = [
+            'bdms' => 'Billing and Discharge Management System (BDMS)',
+            'hics' => 'HMO and Insurance Claims System (HICS)',
+            'emrs' => 'Electronic Medical Records System (EMRS)',
+            'lis' => 'Laboratory Information System (LIS)',
+            'ris' => 'Radiology and Imaging System (RIS)',
+            'pms' => 'Pharmacy Management System (PMS)',
+            'hads' => 'Healthcare Analytics and Dashboard System (HADS)',
+            'sas' => 'Security and Administration System (SAS)',
+            'hrms' => 'Human Resource Management System (HRMS)',
+            'vrds' => 'Vehicle Reservation and Dispatch System (VRDS)',
+        ];
+
+        $webResponse = $this->actingAs($admin)->get('/admin/integrations')->assertOk();
+        $apiResponse = $this->actingAs($admin)->getJson('/api/v1/integrations/admin')->assertOk();
+
+        foreach ($names as $code => $name) {
+            $this->assertSame($name, config("integrations.partners.{$code}.name"));
+            $webResponse->assertSee($name);
+            $apiResponse->assertJsonFragment(['code' => $code, 'name' => $name]);
+        }
+    }
+
     public function test_partner_auth_accepts_keys_rejects_bad_keys_missing_abilities_and_human_tokens(): void
     {
         $this->withHeaders($this->partnerHeaders('bdms'))

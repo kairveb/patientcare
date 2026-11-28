@@ -7,7 +7,7 @@ return [
     'export_retention_days' => (int) env('INTEGRATION_EXPORT_RETENTION_DAYS', 30),
     'partners' => [
         'bdms' => [
-            'name' => 'Billing and Discharge Management System',
+            'name' => 'Billing and Discharge Management System (BDMS)',
             'base_url' => env('INTEGRATION_BDMS_BASE_URL'),
             'api_key' => env('INTEGRATION_BDMS_API_KEY'),
             'outbound_token' => env('INTEGRATION_BDMS_OUTBOUND_TOKEN'),
@@ -16,7 +16,7 @@ return [
             'sharing_consent_version' => env('BDMS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'hics' => [
-            'name' => 'HMO and Insurance Claims System',
+            'name' => 'HMO and Insurance Claims System (HICS)',
             'base_url' => env('INTEGRATION_HICS_BASE_URL'),
             'api_key' => env('INTEGRATION_HICS_API_KEY'),
             'outbound_token' => env('INTEGRATION_HICS_OUTBOUND_TOKEN'),
@@ -25,7 +25,7 @@ return [
             'sharing_consent_version' => env('HICS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'lis' => [
-            'name' => 'Laboratory Information System',
+            'name' => 'Laboratory Information System (LIS)',
             'base_url' => env('INTEGRATION_LIS_BASE_URL'),
             'api_key' => env('INTEGRATION_LIS_API_KEY'),
             'outbound_token' => env('INTEGRATION_LIS_OUTBOUND_TOKEN'),
@@ -34,7 +34,7 @@ return [
             'sharing_consent_version' => env('LIS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'ris' => [
-            'name' => 'Radiology Information System',
+            'name' => 'Radiology and Imaging System (RIS)',
             'base_url' => env('INTEGRATION_RIS_BASE_URL'),
             'api_key' => env('INTEGRATION_RIS_API_KEY'),
             'outbound_token' => env('INTEGRATION_RIS_OUTBOUND_TOKEN'),
@@ -43,7 +43,7 @@ return [
             'sharing_consent_version' => env('RIS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'pms' => [
-            'name' => 'Pharmacy Management System',
+            'name' => 'Pharmacy Management System (PMS)',
             'base_url' => env('INTEGRATION_PMS_BASE_URL'),
             'api_key' => env('INTEGRATION_PMS_API_KEY'),
             'outbound_token' => env('INTEGRATION_PMS_OUTBOUND_TOKEN'),
@@ -52,7 +52,7 @@ return [
             'sharing_consent_version' => env('PMS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'emrs' => [
-            'name' => 'Electronic Medical Records Exchange',
+            'name' => 'Electronic Medical Records System (EMRS)',
             'base_url' => env('INTEGRATION_EMRS_BASE_URL'),
             'api_key' => env('INTEGRATION_EMRS_API_KEY'),
             'outbound_token' => env('INTEGRATION_EMRS_OUTBOUND_TOKEN'),
@@ -61,7 +61,7 @@ return [
             'sharing_consent_version' => env('EMRS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'hrms' => [
-            'name' => 'Human Resource Management System',
+            'name' => 'Human Resource Management System (HRMS)',
             'base_url' => env('INTEGRATION_HRMS_BASE_URL'),
             'api_key' => env('INTEGRATION_HRMS_API_KEY'),
             'outbound_token' => env('INTEGRATION_HRMS_OUTBOUND_TOKEN'),
@@ -70,7 +70,7 @@ return [
             'sharing_consent_version' => env('HRMS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'hads' => [
-            'name' => 'Healthcare Analytics Data Service',
+            'name' => 'Healthcare Analytics and Dashboard System (HADS)',
             'base_url' => env('INTEGRATION_HADS_BASE_URL'),
             'api_key' => env('INTEGRATION_HADS_API_KEY'),
             'outbound_token' => env('INTEGRATION_HADS_OUTBOUND_TOKEN'),
@@ -79,7 +79,7 @@ return [
             'sharing_consent_version' => env('HADS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'sas' => [
-            'name' => 'Security and Administration Service',
+            'name' => 'Security and Administration System (SAS)',
             'base_url' => env('INTEGRATION_SAS_BASE_URL'),
             'api_key' => env('INTEGRATION_SAS_API_KEY'),
             'outbound_token' => env('INTEGRATION_SAS_OUTBOUND_TOKEN'),
@@ -89,7 +89,7 @@ return [
             'sharing_consent_version' => env('SAS_SHARING_CONSENT_VERSION', '1.0'),
         ],
         'vrds' => [
-            'name' => 'Vehicle Reservation and Dispatch System',
+            'name' => 'Vehicle Reservation and Dispatch System (VRDS)',
             'base_url' => env('INTEGRATION_VRDS_BASE_URL'),
             'api_key' => env('INTEGRATION_VRDS_API_KEY'),
             'outbound_token' => env('INTEGRATION_VRDS_OUTBOUND_TOKEN'),

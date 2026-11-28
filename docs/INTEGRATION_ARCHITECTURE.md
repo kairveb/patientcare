@@ -274,7 +274,13 @@ Add these values in HostForge's **Environment Variables** tab; do not create or 
 
 ## Production rollout
 
-Back up the database and verify the maintenance/rollback window before deploying. After the application code is deployed and the environment variables have been set, run:
+For a partner display-name refresh only, after deploying the application code, run only this command; it updates the `name` for each existing partner by unique code and leaves credentials, abilities, mode, and `last_used_at` unchanged. No migration or other seeder is needed:
+
+```powershell
+php artisan db:seed --class="Database\Seeders\IntegrationPartnerSeeder" --force
+```
+
+For a full integration rollout, back up the database and verify the maintenance/rollback window before deploying. After the application code is deployed and the environment variables have been set, run:
 
 ```powershell
 php artisan optimize:clear
@@ -289,22 +295,22 @@ php artisan config:cache
 php artisan queue:restart
 ```
 
-Do not run plain `php artisan db:seed` or `DatabaseSeeder` in production. The explicit ordered classes above cover the shared reference/RBAC foundation, Admin's idempotent removal of only `view-er` and `view-admissions`, care-request RBAC, and all integration partner/RBAC configuration. These seeders are repeat-safe: they use `firstOrCreate`/`firstOrNew`, additive `syncWithoutDetaching`, or a targeted detach of only the two denied Admin permissions. The migrations guard table creation. Configure the host scheduler to run `php artisan schedule:run` each minute; use the `hims:request-hads-export` command for a recurring approved dataset. Review migration status and seeded partner configuration before enabling live mode. Deploy with `INTEGRATION_MODE=mock` first; switch to `live` only after a signed test callback and consent review.
+Do not run plain `php artisan db:seed` or `DatabaseSeeder` in production. The explicit ordered classes above cover the shared reference/RBAC foundation, Admin's idempotent removal of only `view-er` and `view-admissions`, care-request RBAC, and all integration partner/RBAC configuration. These seeders are repeat-safe: they use `firstOrCreate`/`updateOrCreate`, additive `syncWithoutDetaching`, or a targeted detach of only the two denied Admin permissions. For existing integration partners, the partner seeder updates only the display name; newly created partners receive the configured initial settings. The migrations guard table creation. Configure the host scheduler to run `php artisan schedule:run` each minute; use the `hims:request-hads-export` command for a recurring approved dataset. Review migration status and seeded partner configuration before enabling live mode. Deploy with `INTEGRATION_MODE=mock` first; switch to `live` only after a signed test callback and consent review.
 
 ## Integration status summary
 
 | Partner | Purpose | Status |
 |---|---|---|
-| BDMS | Billing and payment status | Implemented (mock mode) |
-| HICS | Insurance and LOA | Implemented (mock mode) |
-| LIS | Laboratory orders and results | Implemented (mock mode) |
-| RIS | Imaging orders and results | Implemented (mock mode) |
-| PMS | Prescription and dispense status | Implemented (mock mode) |
-| EMRS | Clinical-record exchange | Implemented (mock mode) |
-| HRMS | Provider availability and leave | Implemented (mock mode) |
-| HADS | Aggregate analytics exports | Implemented (mock mode) |
-| SAS | Account status, role mapping, audit events | Implemented (mock mode) |
-| VRDS | Patient transport dispatch/status | Implemented (mock mode) |
+| Billing and Discharge Management System (BDMS) | Billing and payment status | Implemented (mock mode) |
+| HMO and Insurance Claims System (HICS) | Insurance and LOA | Implemented (mock mode) |
+| Laboratory Information System (LIS) | Laboratory orders and results | Implemented (mock mode) |
+| Radiology and Imaging System (RIS) | Imaging orders and results | Implemented (mock mode) |
+| Pharmacy Management System (PMS) | Prescription and dispense status | Implemented (mock mode) |
+| Electronic Medical Records System (EMRS) | Clinical-record exchange | Implemented (mock mode) |
+| Human Resource Management System (HRMS) | Provider availability and leave | Implemented (mock mode) |
+| Healthcare Analytics and Dashboard System (HADS) | Aggregate analytics exports | Implemented (mock mode) |
+| Security and Administration System (SAS) | Account status, role mapping, audit events | Implemented (mock mode) |
+| Vehicle Reservation and Dispatch System (VRDS) | Patient transport dispatch/status | Implemented (mock mode) |
 | SORS | Surgical and OR scheduling | Contract-only |
 | DNMS | Diet and nutrition management | Contract-only |
 

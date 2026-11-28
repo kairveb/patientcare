@@ -57,7 +57,7 @@ class IntegrationExportService
             $partner = IntegrationPartner::firstOrCreate(
                 ['code' => 'hads'],
                 [
-                    'name' => config('integrations.partners.hads.name', 'Healthcare Analytics Data Service'),
+                    'name' => config('integrations.partners.hads.name', 'Healthcare Analytics and Dashboard System (HADS)'),
                     'active' => false,
                     'mode' => 'mock',
                     'allowed_abilities' => config('integrations.partners.hads.abilities', []),
